@@ -190,7 +190,7 @@ cd /step7_genome_annotation/protein
 cat protein/plants/Rawdata/* > proteins.fasta
 ```
 
-# Predict hints
+## Predict hints
 
 ```bash
 cd /step7_genome_annotation/protein
@@ -426,3 +426,71 @@ GO_clean <- GO_clean %>%
   mutate(GO = str_replace_all(GO, ",[,]+", ","))
 write_tsv(GO_clean, "data_out/GO.tsv", na = "", col_names = F)
 ```
+
+---
+
+# RNA-Seq analysis
+
+## Filter/trim (already done for genome assembly)
+```bash
+cd /RNAseq/Step1_filter_trim
+# make symbolic link of trimmed reads
+ln -s -t . /data/JA_timecourse/trimmed/*.fastq.gz
+```
+
+## Align reads with STAR
+```bash
+cd /RNAseq/Step2_align
+conda activate star
+mkdir star_indexes
+STAR --runMode genomeGenerate --runThreadN 10 --genomeDir ./star_indexes --genomeFastaFiles primary_assembly.fa --sjdbGTFtagExonParentTranscript Parent --sjdbGTFfile /step7_genome_annotation/combined/annotations_combined.gff3 --sjdbOverhang 100
+mkdir star_aligned
+ln -s -t . /data/JA_timecourse/trimmed/*.fastq.gz
+chmod +x align.sh
+nohup ./align.sh &> star_out.txt &
+```
+
+code in align.sh
+```
+#!/bin/bash
+# to run: 
+# chmod +x align.sh
+# <path>/align.sh
+# Example: ./align.sh
+for i in *1_trimmed.fastq.gz; do STAR --genomeDir ./star_indexes --runThreadN 10 --readFilesIn ${i} ${i%1_trimmed.fastq.gz}2_trimmed.fastq.gz --readFilesType Fastx --readFilesCommand zcat --readMapNumber -1 --clip3pNbases 0 --clip5pNbases 0 --outFileNamePrefix ./star_aligned/${i%1_trimmed.fastq.gz} --outSAMtype BAM Unsorted; done
+```
+
+Look at the files ending in Log.final.out to see how well the reads aligned (you want to make sure there wasn't a large amount of contamination in your reads)
+
+## Sort with samtools
+
+Sort each file by read name and genome position
+
+```bash
+cd /RNAseq/Step2_align/star_aligned
+conda activate samtools
+for i in *Aligned.out.bam; do samtools sort -@10 -n -o - ${i} | samtools sort -@10 -o /RNAseq/Step3_sort/${i%Aligned.out.bam}Aligned_sorted.bam -; done
+```
+
+## Count reads with htseq
+
+```bash
+cd /RNAseq/Step3_sort
+conda activate htseq
+chmod +x count.sh
+nohup ./count.sh &> htseq_out.txt &
+```
+
+in count.sh
+
+```
+#!/bin/bash
+# to run: 
+# chmod +x count.sh
+# <path>/count.sh
+# Example: ./count.sh
+for i in *A*Aligned_sorted.bam; do htseq-count -m union -s yes -r pos -i Parent -a 10 -f bam ./${i} /step7_genome_annotation/combined/annotations_combined.gff3 > /RNAseq/Step4_count/${i%_L003_Aligned_sorted.bam}.tsv; done
+```
+
+## Differential expression analysis in R
+
