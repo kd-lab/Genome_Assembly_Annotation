@@ -1,4 +1,6 @@
-# Genome assembly and annotation scripts/code
+# Genome assembly, annotation, and RNA-Seq scripts/code
+
+This is all the scripts and code used in the paper __________
 
 ## Check quality of reads
 
