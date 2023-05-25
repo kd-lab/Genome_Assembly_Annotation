@@ -1,0 +1,1025 @@
+---
+title: "R Notebook for JA timecourse 2022"
+output: html_notebook
+---
+
+https://bioconductor.org/packages/release/bioc/manuals/edgeR/man/edgeR.pdf
+
+https://bioconductor.org/packages/release/bioc/vignettes/edgeR/inst/doc/edgeRUsersGuide.pdf
+
+```
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("edgeR")
+BiocManager::install("topGO", force = TRUE) #exclude update of vctrs and xfun
+```
+
+
+```{r}
+library(tidyverse)
+library(edgeR)
+library(pheatmap)
+library(viridis)
+library(gridExtra)
+library(seqinr)
+library(topGO)
+library(dtwclust)
+library(VennDiagram)
+```
+
+```{r}
+sessionInfo()
+```
+
+Output:
+```
+R version 4.2.2 (2022-10-31 ucrt)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 10 x64 (build 19045)
+
+Matrix products: default
+
+Random number generation:
+ RNG:     L'Ecuyer-CMRG 
+ Normal:  Inversion 
+ Sample:  Rejection 
+ 
+locale:
+[1] LC_COLLATE=English_United States.utf8  LC_CTYPE=English_United States.utf8    LC_MONETARY=English_United States.utf8
+[4] LC_NUMERIC=C                           LC_TIME=English_United States.utf8    
+
+attached base packages:
+[1] grid      stats4    stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] VennDiagram_1.7.3    futile.logger_1.4.3  dtwclust_5.5.11      dtw_1.23-1           proxy_0.4-27         topGO_2.50.0        
+ [7] SparseM_1.81         GO.db_3.16.0         AnnotationDbi_1.60.0 IRanges_2.32.0       S4Vectors_0.36.0     Biobase_2.58.0      
+[13] graph_1.76.0         BiocGenerics_0.44.0  seqinr_4.2-23        gridExtra_2.3        viridis_0.6.2        viridisLite_0.4.1   
+[19] pheatmap_1.0.12      forcats_0.5.2        stringr_1.5.0        dplyr_1.0.10         purrr_0.3.5          readr_2.1.3         
+[25] tidyr_1.2.1          tibble_3.1.8         ggplot2_3.4.0        tidyverse_1.3.2      edgeR_3.40.0         limma_3.54.0        
+
+loaded via a namespace (and not attached):
+  [1] googledrive_2.0.0      colorspace_2.0-3       ellipsis_0.3.2         class_7.3-20           modeltools_0.2-23     
+  [6] XVector_0.38.0         fs_1.5.2               clue_0.3-63            rstudioapi_0.14        ggrepel_0.9.2         
+ [11] bit64_4.0.5            RSpectra_0.16-1        fansi_1.0.3            lubridate_1.9.0        xml2_1.3.3            
+ [16] codetools_0.2-18       cachem_1.0.6           knitr_1.41             ade4_1.7-20            jsonlite_1.8.3        
+ [21] broom_1.0.1            cluster_2.1.4          dbplyr_2.2.1           png_0.1-8              shiny_1.7.3           
+ [26] compiler_4.2.2         httr_1.4.4             backports_1.4.1        assertthat_0.2.1       Matrix_1.5-3          
+ [31] fastmap_1.1.0          gargle_1.2.1           cli_3.4.1              formatR_1.12           later_1.3.0           
+ [36] htmltools_0.5.3        tools_4.2.2            gtable_0.3.1           glue_1.6.2             GenomeInfoDbData_1.2.9
+ [41] reshape2_1.4.4         Rcpp_1.0.9             cellranger_1.1.0       vctrs_0.5.1            Biostrings_2.66.0     
+ [46] iterators_1.0.14       xfun_0.35              rvest_1.0.3            timechange_0.1.1       mime_0.12             
+ [51] lifecycle_1.0.3        googlesheets4_1.0.1    MASS_7.3-58.1          zlibbioc_1.44.0        scales_1.2.1          
+ [56] hms_1.1.2              promises_1.2.0.1       parallel_4.2.2         lambda.r_1.2.4         RColorBrewer_1.1-3    
+ [61] yaml_2.3.6             memoise_2.0.1          stringi_1.7.8          RSQLite_2.2.19         foreach_1.5.2         
+ [66] GenomeInfoDb_1.34.3    rlang_1.0.6            pkgconfig_2.0.3        matrixStats_0.63.0     bitops_1.0-7          
+ [71] evaluate_0.18          lattice_0.20-45        bit_4.0.5              tidyselect_1.2.0       plyr_1.8.8            
+ [76] magrittr_2.0.3         R6_2.5.1               generics_0.1.3         DBI_1.1.3              withr_2.5.0           
+ [81] pillar_1.8.1           haven_2.5.1            KEGGREST_1.38.0        RCurl_1.98-1.9         modelr_0.1.10         
+ [86] crayon_1.5.2           futile.options_1.0.1   utf8_1.2.2             tzdb_0.3.0             rmarkdown_2.18        
+ [91] readxl_1.4.1           locfit_1.5-9.6         flexclust_1.4-1        blob_1.2.3             reprex_2.0.2          
+ [96] digest_0.6.30          xtable_1.8-4           httpuv_1.6.6           RcppParallel_5.1.5     munsell_0.5.0         
+[101] shinyjs_2.1.0
+```
+
+
+# Read in data
+## Read in counts
+
+- need to make into a nice table with each sample as a column header that makes sense
+- col_types = "n" specifies that the data is numeric
+```{r echo=FALSE,warning=FALSE,message=FALSE,error=FALSE}
+setwd("data_in/Counts")
+f <- c("TranscriptID", list.files(pattern = "*.tsv") %>% str_remove("_.*"))
+
+f1 <- c("blank", list.files(pattern = "*.tsv"))
+
+dat <- read_tsv(f1[2], col_names = f[1:2], comment = "_")
+
+for (i in 3:length(f1)){
+  dat <- full_join(dat, read_tsv(f1[i], col_names = f[c(1,i)], comment = "_"))
+}
+
+tid <- dat$TranscriptID
+dat <- dat %>% dplyr::select(!TranscriptID)
+dat <- as.matrix(dat)
+
+rownames(dat) <- tid
+
+as.data.frame(head(dat))
+```
+
+## Read in metadata
+```{r}
+meta <- read_csv("data_in/metadata.csv") %>% mutate(Group = factor(paste(Treatment,Time, sep = "")))
+meta
+```
+
+# Convert to DGEList object
+This is an edgeR-specific data type which holds all the information needed for any analysis
+```{r}
+y <- DGEList(counts=dat, group=meta$Group)
+
+# normalize
+y <- calcNormFactors(y, method="TMM")
+
+y$samples
+```
+
+## Make a matrix indicating the relationship between different samples
+```{r}
+design <- model.matrix(~0+meta$Group, data = y$samples)
+colnames(design) <- levels(y$samples$group)
+design
+```
+
+## Filter lowly expressed genes
+
+Only counts with at least 30 reads will be kept
+```{r}
+keep <- filterByExpr(y, min.count = 30, design = design, group = meta$Group)
+y <- y[keep,,keep.lib.sizes=FALSE]
+head(y$counts)
+```
+
+## Estimate dispersion
+
+- Can be done with linear model or generalized linear model (GLM)
+  - **GLM is more flexible, so I will be using this**
+- Common dispersion = mean dispersion across all genes
+- Trended dispersion = mean dispersion across all genes with similar abundance (the fitted value of the mean-dispersion trend)
+- Tagwise dispersion = "raw" tagwise estimates (not information across genes)
+- Too much variability will mean DE analysis will have a lot of noise
+- These estimates help ensure the correct model is used for DE analysis later
+- "Biological CV (BCV) is the coefficient of variation (CV) with which the (unknown) true abundance of the gene varies between replicate RNA samples. **It represents the CV that would remain between biological replicates if sequencing depth could be increased indefinitely.** The **technical CV decreases as the size of the counts increases. BCV on the other hand does not.** BCV is therefore likely to be the dominant source of uncertainty for high-count genes, so reliable estimation of BCV is crucial for realistic assessment of differential expression in RNA-Seq experiments. If the abundance of each gene varies between replicate RNA samples in such a way that the genewise standard deviations are proportional to the genewise means, a commonly occurring property of measurements on physical quantities, then it is reasonable to suppose that BCV is approximately constant across genes. We allow however for the possibility that BCV might vary between genes and might also show a systematic trend with respect to gene expression or expected count.The magnitude of BCV is more important than the exact probabilistic law followed by the true gene abundances. For mathematical convenience, we assume that the true gene abundances follow a gamma distributional law between replicate RNA samples. This implies that the read counts follow a negative binomial probability law." (https://academic.oup.com/nar/article/40/10/4288/2411520)
+- "Common dispersion (i.e. red line on the BCV plot) between **0.2 and 0.4 is usually considered reasonable** and hence could detect more DE genes. If the common dispersion is above the 0.4 threshold, this will influence the number of DE genes found in the study." (https://bioinformatics.cvr.ac.uk/some-key-factors-for-number-of-significant-de-genes/)
+  - Us having common dispersion close to 0 means that the overall variation between times, replicates, and treatments is low, which will mean fewer differentially expressed genes being detected\
+
+```{r}
+#regular dispersion
+y <- estimateDisp(y,design)
+# estimate common dispersion:
+y <- estimateCommonDisp(y)
+# to estimate tagwise dispersions:
+y <- estimateTagwiseDisp(y)
+
+plotBCV(y, main = "Regular dispersion")
+```
+
+Note: only the trended dispersion is used under the quasi-likelihood (QL) pipeline
+```{r}
+# GLM dispersion
+# estimate common dispersion
+y <- estimateGLMCommonDisp(y, design)
+# estimate trended dispersions:
+y <- estimateGLMTrendedDisp(y, design)
+# estimate tagwise dispersions:
+y <- estimateGLMTagwiseDisp(y, design)
+
+y
+
+plotBCV(y, main = "GLM dispersion")
+```
+
+## Mean-difference plot (MD-plot)
+
+- What is plotMD? "A mean-difference plot (MD-plot) is a plot of log fold changes (differences) versus average log values (means). The history of mean-difference plots and MA-plots is reviewed in Ritchie et al (2015)." (https://rdrr.io/bioc/edgeR/man/plotMD.html)
+- "The performance of the TMM normalization procedure can be examined using mean-difference (MD) plots. This **visualizes the library size-adjusted log-fold change between two libraries (the difference) against the average log-expression across those libraries (the mean)**. The following MD plot is generated by comparing sample 1 against an artificial library constructed from the average of all other samples." ... "**Ideally, the bulk of genes should be centred at a log-fold change of zero. This indicates that any composition bias between libraries has been successfully removed.** This quality check should be repeated by constructing a MD plot for each sample."
+
+```{r eval=F}
+for (i in 1:30){
+  plotMD(cpm(y, log=TRUE), column=i)
+  abline(h=0, col="red", lty=2, lwd=2)
+}
+```
+
+##  Multi-dimensional scaling (MDS) plot
+
+What is MDS plot? Visualization of the differences between the expression profiles of different samples in two dimensions. It does this by calculating the relative distance between samples as a distance matrix.
+
+```{r fig.width = 6, fig.height = 6.5}
+points <- c(0,1,2,3,4,15,16,17,18,19)
+colors <- rep(c("#b37d36", "#36b37e", "#3668b3", "#6e36b3", "#b33670"), 3)
+plotMDS(y, col=colors[meta$Group], pch=points[meta$Group])
+legend("topleft", legend=levels(meta$Group), pch=points, col=colors, ncol=2)
+```
+
+
+# Do differential expression analysis
+
+These are GLM-based tests: glmQLFit() fits the negative binomial
+
+GLM for each tag
+- QL = quasi-likelihood
+- Raw = estimated values of the GLM coefficients for each gene
+- Trend = fitted mean-QL dispersion trend
+- Squeezed = squeezed QL estimates
+  - This method is adapted from this paper: http://www.statsci.org/smyth/pubs/QuasiSeqPreprint.pdf
+  - "Estimation of the gene-specific QL dispersion is difficult as most RNA-seq data sets have limited numbers of replicates. This means that there is often little information to stably estimate the dispersion for each gene. To overcome this, an empirical Bayes (EB) approach is used whereby information is shared between genes [16, 7, 17]. Briefly, a mean-dependent trend is fitted to the raw QL dispersion estimates. The raw estimates are then squeezed towards this trend to obtain moderated EB estimates, which can be used in place of the raw values for downstream hypothesis testing. This EB strategy reduces the uncertainty of the estimates and improves testing power." http://www.statsci.org/smyth/pubs/QLedgeRPreprint.pdf
+
+```{r}
+# QL dispersion estimation and hypothesis testing
+fit <- glmQLFit(y,design, robust = T)
+
+plotQLDisp(fit, main = "QL dispersion estimation")
+```
+
+# Prepare contrasts
+
+```{r}
+my.contrasts <- makeContrasts(
+  JAvsEt1 = (JA1h-JA0h)-(Et1h-Et0h),
+  JAvsEt2 = (JA2h-JA0h)-(Et2h-Et0h),
+  JAvsEt4 = (JA4h-JA0h)-(Et4h-Et0h),
+  JAvsEt6 = (JA6h-JA0h)-(Et6h-Et0h), 
+  levels = design)
+```
+
+# Do differential expression analysis taking taking into account minimum FC 1.5
+
+- Cutoffs are FDR <0.01 and fold change > 1.5 
+- There is no mathematical reason that a gene below any fold change cutoff wouldn't be statistically significantly differentially expressed, but I opted for a small cutoff for biological reasons
+- Page 5 of egdeR manual: "Note that the fold-change threshold in glmTreat() is not the minimum value of the fold-change expected to see from the testing results. Genes will need to exceed this threshold by some way before being declared statistically significant. It is better to interpret the threshold as “the fold-change below which we are definitely not interested in the gene" rather than “the fold-change above which we are interested in the gene". "
+
+```{r}
+lfc = log2(1.5)
+# do DE for 1h
+qlf <- glmTreat(fit, contrast = my.contrasts[,"JAvsEt1"], lfc=lfc)
+
+# calculate FDR for all
+pairwise_de <- as.data.frame(topTags(qlf, n = nrow(dat), sort.by = "none")) 
+pairwise_de <- pairwise_de %>% 
+  dplyr::select(c(logFC, logCPM, FDR)) %>% 
+  dplyr::rename("logFC_JAvsEt1" = logFC, "logCPM_JAvsEt1" = logCPM, "FDR_JAvsEt1" = FDR) %>% 
+  rownames_to_column(var = "TranscriptId")
+
+# do DE for 2h
+qlf <- glmTreat(fit, contrast = my.contrasts[,"JAvsEt2"], lfc=lfc)
+
+# calculate FDR
+temp <- as.data.frame(topTags(qlf, n = nrow(dat), sort.by = "none")) %>% 
+  dplyr::select(c(logFC, logCPM, FDR)) %>% 
+  dplyr::rename("logFC_JAvsEt2" = logFC, "logCPM_JAvsEt2" = logCPM, "FDR_JAvsEt2" = FDR) %>% 
+  rownames_to_column(var = "TranscriptId")
+
+# merge
+pairwise_de <- merge(pairwise_de, temp, by="TranscriptId")
+
+# do DE for 4h
+qlf <- glmTreat(fit, contrast = my.contrasts[,"JAvsEt4"], lfc=lfc)
+
+# calculate FDR
+temp <- as.data.frame(topTags(qlf, n = nrow(dat), sort.by = "none")) %>% 
+  dplyr::select(c(logFC, logCPM, FDR)) %>% 
+  dplyr::rename("logFC_JAvsEt4" = logFC, "logCPM_JAvsEt4" = logCPM, "FDR_JAvsEt4" = FDR) %>% 
+  rownames_to_column(var = "TranscriptId")
+
+# merge
+pairwise_de <- merge(pairwise_de, temp, by="TranscriptId")
+
+# do DE for 6h
+qlf <- glmTreat(fit, contrast = my.contrasts[,"JAvsEt6"], lfc=lfc)
+
+# calculate FDR
+temp <- as.data.frame(topTags(qlf, n = nrow(dat), sort.by = "none")) %>% 
+  dplyr::select(c(logFC, logCPM, FDR)) %>% 
+  dplyr::rename("logFC_JAvsEt6" = logFC, "logCPM_JAvsEt6" = logCPM, "FDR_JAvsEt6" = FDR) %>% 
+  rownames_to_column(var = "TranscriptId")
+
+# merge
+pairwise_de <- merge(pairwise_de, temp, by="TranscriptId")
+
+pairwise_de
+```
+
+Write to file
+
+```{r}
+write.csv(pairwise_de, "data_out/Supplementary_data_1.csv", row.names = F)
+```
+
+## Select differentially expressed genes (FDR < 0.01 in at least one pairwise comparison)
+
+```{r}
+fdr = 0.01
+de_genes <- pairwise_de %>% 
+  filter(FDR_JAvsEt1 < fdr | 
+           FDR_JAvsEt2 < fdr | 
+           FDR_JAvsEt4 < fdr | 
+           FDR_JAvsEt6 < fdr) %>% 
+  dplyr::select(c(TranscriptId, logFC_JAvsEt1, logFC_JAvsEt2, logFC_JAvsEt4, logFC_JAvsEt6))
+
+de_genes
+```
+
+# Cluster analysis
+
+### Data before scaling
+
+```{r}
+scaledata_fc <- de_genes %>% column_to_rownames(var = "TranscriptId")
+paste("Unscaled data range: ", round(min(scaledata_fc),2), "-", round(max(scaledata_fc),2))
+paste("Number of transcripts before scaling:", nrow(scaledata_fc))
+```
+
+
+### Scale and center log2FC
+
+```{r}
+scaledata_fc <- t(scale(t(as.matrix(scaledata_fc)), center = T))
+# filter out missing data (can result from scaling)
+scaledata_fc <- scaledata_fc[complete.cases(scaledata_fc),]
+head(as.data.frame(scaledata_fc), n=10)
+paste("Scaled data range: ", round(min(scaledata_fc),2), "-", round(max(scaledata_fc),2))
+paste("Number of transcripts after scaling:", nrow(scaledata_fc))
+
+as.data.frame(scaledata_fc) %>% rownames_to_column() %>% pivot_longer(2:5) %>% 
+  ggplot(.) +
+  aes(x = value, fill = name) +
+  geom_density(adjust = 0.5, alpha = 0.7) +
+  scale_fill_brewer(palette = "BuPu") +
+  theme_bw()
+```
+
+## dtwclust
+
+### Convert to list format
+
+```{r}
+set.seed(124)
+#scaledata_t_sub <- scaledata_fc[sample(nrow(scaledata_fc),2000),]
+#scaledata_t <- de_genes[1:1000,] %>% column_to_rownames(var = "TranscriptId")
+scaledata_t <- scaledata_fc
+colnames(scaledata_t) <- c(1,2,4,6)
+scaledata_t <- tslist(scaledata_t, simplify=T)
+head(scaledata_t)
+```
+
+### Calculate clusters
+
+Three algorithms with default settings and different numbers of clusters:
+
+- Algorithms: partitional, hierarchical, tadpole
+- Cluster sizes: 4, 6, 8, 10
+
+```{r}
+cluster_part_k4 <- tsclust(series = scaledata_t, type = "partitional", k = 4, preproc = NULL, distance = "dtw_basic", centroid = "pam", args = tsclust_args(), seed = 1245, trace = T, error.check = T)
+cluster_part_k6 <- tsclust(series = scaledata_t, type = "partitional", k = 6, preproc = NULL, distance = "dtw_basic", centroid = "pam", args = tsclust_args(), seed = 1245, trace = T, error.check = T)
+cluster_part_k8 <- tsclust(series = scaledata_t, type = "partitional", k = 8, preproc = NULL, distance = "dtw_basic", centroid = "pam", args = tsclust_args(), seed = 1245, trace = T, error.check = T)
+cluster_part_k10 <- tsclust(series = scaledata_t, type = "partitional", k = 10, preproc = NULL, distance = "dtw_basic", centroid = "pam", args = tsclust_args(), seed = 1245, trace = T, error.check = T)
+
+cluster_hi_k4 <- tsclust(series = scaledata_t, type = "hierarchical", k = 4, preproc = NULL, distance = "dtw_basic", centroid = "pam", args = tsclust_args(), seed = 1245, trace = T, error.check = T)
+cluster_hi_k6 <- tsclust(series = scaledata_t, type = "hierarchical", k = 6, preproc = NULL, distance = "dtw_basic", centroid = "pam", args = tsclust_args(), seed = 1245, trace = T, error.check = T)
+cluster_hi_k8 <- tsclust(series = scaledata_t, type = "hierarchical", k = 8, preproc = NULL, distance = "dtw_basic", centroid = "pam", args = tsclust_args(), seed = 1245, trace = T, error.check = T)
+cluster_hi_k10 <- tsclust(series = scaledata_t, type = "hierarchical", k = 10, preproc = NULL, distance = "dtw_basic", centroid = "pam", args = tsclust_args(), seed = 1245, trace = T, error.check = T)
+
+cluster_tad_k4 <- tsclust(series = scaledata_t, type = "tadpole", k = 4, preproc = NULL, args = tsclust_args(), seed = 1245, trace = T, error.check = T, control = tadpole_control(dc = 1, window.size = 1))
+cluster_tad_k6 <- tsclust(series = scaledata_t, type = "tadpole", k = 6, preproc = NULL, args = tsclust_args(), seed = 1245, trace = T, error.check = T, control = tadpole_control(dc = 1, window.size = 1))
+cluster_tad_k8 <- tsclust(series = scaledata_t, type = "tadpole", k = 8, preproc = NULL, args = tsclust_args(), seed = 1245, trace = T, error.check = T, control = tadpole_control(dc = 1, window.size = 1))
+cluster_tad_k10 <- tsclust(series = scaledata_t, type = "tadpole", k = 10, preproc = NULL, args = tsclust_args(), seed = 1245, trace = T, error.check = T, control = tadpole_control(dc = 1, window.size = 1))
+```
+Crisp partitions
+
+– "Sil" (!): Silhouette index (Rousseeuw (1987); to be maximized).
+– "D" (!): Dunn index (Arbelaitz et al. (2013); to be maximized).
+– "COP" (!): COP index (Arbelaitz et al. (2013); to be minimized).
+– "DB" (?): Davies-Bouldin index (Arbelaitz et al. (2013); to be minimized).
+– "DBstar" (?): Modified Davies-Bouldin index (DB*) (Kim and Ramakrishna (2005); to be minimized).
+– "CH" (~): Calinski-Harabasz index (Arbelaitz et al. (2013); to be maximized).
+– "SF" (~): Score Function (Saitta et al. (2007); to be maximized; see notes).
+
+Fuzzy partitions (using the nomenclature from Wang and Zhang (2007))
+
+– "MPC": to be maximized.
+– "K" (~): to be minimized.
+– "T": to be minimized.
+– "SC" (~): to be maximized.
+– "PBMF" (~): to be maximized (see notes)
+```{r}
+best_cluster <- as.data.frame(cvi(cluster_part_k4)) %>%
+  cbind(as.data.frame(cvi(cluster_part_k6))) %>%
+  cbind(as.data.frame(cvi(cluster_part_k8))) %>% 
+  cbind(as.data.frame(cvi(cluster_part_k10))) %>% 
+  cbind(as.data.frame(cvi(cluster_hi_k4))) %>%
+  cbind(as.data.frame(cvi(cluster_hi_k6))) %>%
+  cbind(as.data.frame(cvi(cluster_hi_k8))) %>%
+  cbind(as.data.frame(cvi(cluster_tad_k4))) %>%
+  cbind(as.data.frame(cvi(cluster_tad_k6))) %>% 
+  cbind(as.data.frame(cvi(cluster_tad_k8))) %>%
+  cbind(as.data.frame(cvi(cluster_tad_k10))) %>% 
+  mutate(desired_outcome = c("max", "max", "max", "min", "min", "max", "min"))
+
+#display the algorithm with the max score, for those metrics that want that
+best_cluster$result[best_cluster$desired_outcome == "max"] <- colnames(best_cluster[best_cluster$desired_outcome == "max",])[apply(best_cluster[best_cluster$desired_outcome == "max",],1,which.max)]
+
+#display the algorithm with the min score, for those metrics that want that
+best_cluster$result[best_cluster$desired_outcome == "min"] <- colnames(best_cluster[best_cluster$desired_outcome == "min",])[apply(best_cluster[best_cluster$desired_outcome == "min",],1,which.min)]
+
+best_cluster
+as.data.frame(table(best_cluster$result))
+```
+
+Hierarchical is best, now see which distance method is best: dtw_basic or euclidean
+```{r}
+cluster_hi_e_k4 <- tsclust(series = scaledata_t, type = "hierarchical", k = 4, preproc = NULL, distance = "euclidean", centroid = "pam", args = tsclust_args(), seed = 1245, trace = T, error.check = T)
+```
+
+```{r}
+best_cluster <- as.data.frame(cvi(cluster_hi_k4)) %>%
+  cbind(as.data.frame(cvi(cluster_hi_e_k4))) %>%
+  mutate(desired_outcome = c("max", "max", "max", "min", "min", "max", "min"))
+
+#display the algorithm with the max score, for those metrics that want that
+best_cluster$result[best_cluster$desired_outcome == "max"] <- colnames(best_cluster[best_cluster$desired_outcome == "max",])[apply(best_cluster[best_cluster$desired_outcome == "max",],1,which.max)]
+
+#display the algorithm with the min score, for those metrics that want that
+best_cluster$result[best_cluster$desired_outcome == "min"] <- colnames(best_cluster[best_cluster$desired_outcome == "min",])[apply(best_cluster[best_cluster$desired_outcome == "min",],1,which.min)]
+
+best_cluster
+as.data.frame(table(best_cluster$result))
+```
+
+Euclidean is best, now see which control is best: “ward.D2”, “single”, “average”, “mcquitty”, “centroid”
+```{r}
+cluster_hi_k4s <- tsclust(series = scaledata_t, type = "hierarchical", k = 4, preproc = NULL, distance = "euclidean", args = tsclust_args(), seed = 1245, trace = T, error.check = T, control = hierarchical_control(method = "single"))
+cluster_hi_k4w <- tsclust(series = scaledata_t, type = "hierarchical", k = 4, preproc = NULL, distance = "euclidean", args = tsclust_args(), seed = 1245, trace = T, error.check = T, control = hierarchical_control(method = "ward.D2"))
+cluster_hi_k4c <- tsclust(series = scaledata_t, type = "hierarchical", k = 4, preproc = NULL, distance = "euclidean", args = tsclust_args(), seed = 1245, trace = T, error.check = T, control = hierarchical_control(method = "centroid"))
+cluster_hi_k4a <- tsclust(series = scaledata_t, type = "hierarchical", k = 4, preproc = NULL, distance = "euclidean", args = tsclust_args(), seed = 1245, trace = T, error.check = T, control = hierarchical_control(method = "average"))
+cluster_hi_k4m <- tsclust(series = scaledata_t, type = "hierarchical", k = 4, preproc = NULL, distance = "euclidean", args = tsclust_args(), seed = 1245, trace = T, error.check = T, control = hierarchical_control(method = "mcquitty"))
+```
+
+If you want to explore other options in real time (I tried some larger clusters just in case)
+```
+interactive_clustering(scaledata_t)
+```
+
+```{r}
+best_cluster <- as.data.frame(cvi(cluster_hi_k4s)) %>%
+  cbind(as.data.frame(cvi(cluster_hi_k4w))) %>%
+  cbind(as.data.frame(cvi(cluster_hi_k4c))) %>% 
+  cbind(as.data.frame(cvi(cluster_hi_k4a))) %>% 
+  cbind(as.data.frame(cvi(cluster_hi_k4m))) %>%
+  mutate(desired_outcome = c("max", "max", "max", "min", "min", "max", "min"))
+
+#display the algorithm with the max score, for those metrics that want that
+best_cluster$result[best_cluster$desired_outcome == "max"] <- colnames(best_cluster[best_cluster$desired_outcome == "max",])[apply(best_cluster[best_cluster$desired_outcome == "max",],1,which.max)]
+
+#display the algorithm with the min score, for those metrics that want that
+best_cluster$result[best_cluster$desired_outcome == "min"] <- colnames(best_cluster[best_cluster$desired_outcome == "min",])[apply(best_cluster[best_cluster$desired_outcome == "min",],1,which.min)]
+
+best_cluster
+```
+
+
+## Chose cluster
+
+```{r}
+cluster_final <- cluster_hi_k4c
+```
+
+## Make table
+
+```{r}
+time_cluster <- data.frame("TranscriptId" = names(cluster_final@datalist), Cluster = cluster_final@cluster)
+time_cluster
+```
+
+### How many genes per cluster?
+
+```{r fig.width = 5, fig.height = 2}
+colors <- c("#CC4C02", "#35254AFF", "#3493A8FF", "#FEC44F")
+
+names(colors) <- as.character(1:4)
+plot(seq_len(length(colors)), 
+     rep_len(1, length(colors)),
+     col = colors, 
+     pch = 16, 
+     cex = 6, 
+     xaxt = 'n', 
+     yaxt = 'n', 
+     xlab = '', 
+     ylab = '')
+```
+
+```{r}
+an <- as.data.frame(table(time_cluster$Cluster)) %>% rename(Var1 = "Cluster", Freq = "Num_of_genes") %>% 
+  ggplot(.) +
+  aes(x = Cluster, y = Num_of_genes, fill = Cluster) +
+  geom_col() +
+  scale_fill_manual(values = colors) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(y = "Number of Genes") +
+  scale_y_continuous(breaks = seq(0 , 3000, 500), expand = c(0.005,0.005))
+an
+```
+
+# Interpro annotations
+
+https://interproscan-docs.readthedocs.io/en/latest/OutputFormats.html
+
+Available analyses:
+
+- TIGRFAM : TIGRFAMs are protein families based on hidden Markov models (HMMs).
+- SFLD : SFLD is a database of protein families based on hidden Markov models (HMMs).
+- SUPERFAMILY : SUPERFAMILY is a database of structural and functional annotations for all proteins and genomes.
+- PANTHER : The PANTHER (Protein ANalysis THrough Evolutionary Relationships) Classification System is a unique resource that classifies genes by their functions, using published scientific experimental evidence and evolutionary relationships to predict function even in the absence of direct experimental evidence.
+- Gene3D : Structural assignment for whole genes and genomes using the CATH domain structure database.
+- Hamap : High-quality Automated and Manual Annotation of Microbial Proteomes.
+- ProSiteProfiles : PROSITE consists of documentation entries describing protein domains, families and functional sites as well as associated patterns and profiles to identify them.
+- Coils : Prediction of coiled coil regions in proteins.
+- SMART : SMART allows the identification and analysis of domain architectures based on hidden Markov models (HMMs).
+- CDD : CDD predicts protein domains and families based on a collection of well-annotated multiple sequence alignment models.
+- PRINTS : A compendium of protein fingerprints - a fingerprint is a group of conserved motifs used to characterise a protein family.
+- PIRSR : PIRSR is a database of protein families based on hidden Markov models (HMMs) and Site Rules.
+- ProSitePatterns : PROSITE consists of documentation entries describing protein domains, families and functional sites as well as associated patterns and profiles to identify them.
+- AntiFam : AntiFam is a resource of profile-HMMs designed to identify spurious protein predictions.
+- Pfam : A large collection of protein families, each represented by multiple sequence alignments and hidden Markov models (HMMs).
+- MobiDBLite : Prediction of intrinsically disordered regions in proteins.
+- PIRSF : The PIRSF concept is used as a guiding principle to provide comprehensive and non-overlapping clustering of UniProtKB sequences into a hierarchical order to reflect their evolutionary relationships.
+
+In the interpro table:
+
+- Column 1: the protein identifier
+- Column 5: the identifier of the signature that was found in the protein sequence
+- Column 4: the databank where this signature comes from (InterProScan regroups several motifs databanks)
+- Column 6: the human readable description of the motif
+- Columns 7 and 8: the position where the motif was found
+- Column 9: a score for the match (if available)
+- Column 12 and 13: identifier of the signature integrated in InterPro (if available). Have a look an example webpage for IPR036859 on InterPro.
+- https://training.galaxyproject.org/training-material/topics/genome-annotation/tutorials/functional/tutorial.html
+
+```{r}
+interpro <- read_tsv("data_in/annotations_combined_pep.fa.tsv", col_names = c("Protein_accession", "Sequence_MD5_digest", "Sequence_length", "Analysis", "Signature_accession", "Signature_description", "Start_location", "Stop_location", "Evalue", "Status_of_match", "Date", "InterPro_annotations", "InterPro_annotation_description", "GO_annotations", "Pathways_annotations")) %>% 
+  mutate(Protein_accession = str_remove(Protein_accession, "_[0-9]")) %>% 
+  dplyr::select(!c(Sequence_MD5_digest,Pathways_annotations))
+
+head(interpro)
+```
+
+How many genes?
+
+```{r}
+length(unique(interpro$Protein_accession))
+```
+
+# Refine GO annotations
+
+## Add blast results against swissprot
+
+```{r}
+swi <- read_csv("data_in/blast_swiss_annotations_combined.csv", col_names = NULL) %>% 
+  # select only top hit
+  # group by transcript id
+  group_by(X1) %>% 
+  # select hit with lowest evalue
+  dplyr::slice(which.min(X11)) %>% 
+  # select the transcrtipt id and associated swissprot accession
+  dplyr::select(c(X1, X2)) %>% 
+  dplyr::rename("Protein_accession" = X1, "Entry" = X2) %>% 
+  mutate(Protein_accession = str_remove(Protein_accession, "_[0-9]"))
+head(swi)
+```
+
+```{r}
+write(paste(unique(swi$Entry), collapse = " "), "data_out/swissprot_hits.txt")
+```
+
+1. Go to https://www.uniprot.org/id-mapping and load the text file
+2. Select from: UniProtKB_AC-ID     to: UniProtKB-Swiss-Prot
+3. Select the results when loaded
+4. Click 'customize columns' deselect all defaults, and select 'gene ontology IDs', "gene names", and "descriptions"
+5. Download results as tsv, uncompressed
+6. Rename to "get_swissprot_go.tsv"
+
+```{r}
+temp <- read_tsv("data_in/get_swissprot_go.tsv") %>% dplyr::select(c(From, Gene_Ontology_IDs)) %>% dplyr::rename("Entry" = From, "GO_sw" = "Gene_Ontology_IDs")
+
+head(temp)
+#check for improper concatenation
+temp %>% filter(str_detect(GO_sw, "[0-9]GO"))
+```
+
+```{r}
+swi <- full_join(swi, temp, by = "Entry") %>% mutate(GO_sw = str_replace_all(GO_sw, "; ", ",")) %>% dplyr::select(!Entry) %>% mutate(GO_sw = ifelse(is.na(GO_sw), "", GO_sw))
+swi
+#check for improper concatenation
+swi %>% filter(str_detect(GO_sw, "[0-9]GO"))
+```
+
+## Add eggnog annotations
+
+```{r}
+eggnog <- read_tsv("data_in/eggnog.tsv", comment = "#") %>% 
+  dplyr::select(c(Protein_accession, GOs)) %>% 
+  mutate(Protein_accession = str_remove(Protein_accession, "_[0-9]")) %>% 
+  mutate(GOs = str_remove(GOs, "-"))
+eggnog
+#check for improper concatenation
+eggnog %>% filter(str_detect(GOs, "[0-9]GO"))
+```
+
+## Get GO terms per transcript
+
+```{r}
+GO_clean <- interpro[,c(1,13)] %>% 
+  # group by transcriptID (as each has multiple lines)
+  group_by(Protein_accession) %>% 
+  # add a new column concatenating all that are in the same group, and remove the old GO column
+  mutate(GO = paste0(GO_annotations, collapse = ","), .keep = "unused") %>% 
+  # the previous step means that each duplicate will contain all the same data in the GO column, so now can delete duplicates
+  distinct(Protein_accession, .keep_all = T) %>% 
+  # clean up GO column to delete "NA", "-", and "|"
+  mutate(GO = str_remove_all(GO, "NA[,]*")) %>% 
+  mutate(GO = str_remove_all(GO, "-[,]*")) %>% 
+  mutate(GO = str_remove_all(GO, ",$")) %>% 
+  mutate(GO = str_replace_all(GO, "\\|", ","))
+GO_clean
+#check for improper concatenation
+GO_clean %>% filter(str_detect(GO, "[0-9]GO"))
+```
+
+### Combine with swissprot and eggnog GO
+
+```{r}
+GO_clean <- left_join(GO_clean, eggnog, by = "Protein_accession")
+
+GO_clean <- full_join(GO_clean, swi, by = "Protein_accession") %>% 
+  # convert added NAs to blanks
+  replace(is.na(.), "")
+GO_clean <- GO_clean %>% 
+  #mutate(GO = paste0(GO, GOs, GO_sw, collapse = ",")) %>% 
+  #mutate(GO = paste0(GO, GOs, collapse = ",")) %>%
+  unite("GO", c(GO, GOs, GO_sw), sep = ",", remove = T) %>% 
+  # remove extra commas
+  # doubles
+  mutate(GO = str_replace(GO, ",,", ",")) %>% 
+  # at start
+  mutate(GO = str_remove(GO, "^,")) %>% 
+  # at end
+  mutate(GO = str_remove(GO, ",$")) %>% 
+  # remove go_sw and GOs now that part of GO
+  #dplyr::select(c(Protein_accession, GO)) %>% 
+  # split cleaned GO terms for removal of duplicates (next step)
+  mutate(GO_str = strsplit(GO, ","))
+GO_clean
+#check for improper concatenation
+GO_clean %>% filter(str_detect(GO, "[0-9]GO"))
+```
+
+### Get rid of duplicate GO annotations
+
+```{r}
+for (i in 1:nrow(GO_clean)){
+  GO_clean$GO[i] <- paste0(unique(unlist(GO_clean$GO_str[i])), collapse = ",")
+}
+
+GO_clean <- GO_clean %>% 
+  # convert blanks to NAs
+  mutate_all(na_if,"") %>% 
+  # remove GO_str
+  dplyr::select(!GO_str)
+GO_clean
+```
+
+### Check go annotations
+
+```{r}
+GO_names <- GO_clean$GO[!is.na(GO_clean$GO)]
+GO_names <- paste0(GO_names, collapse = ",")
+GO_names <- strsplit(GO_names, ",")
+GO_names <- as.data.frame(GO_names, col.names = "GO")
+GO_names <- as.data.frame(Term(GOTERM)) %>% rename("Term(GOTERM)" = "GO_term") %>% rownames_to_column(var = "GO") %>% left_join(GO_names, ., by = "GO") %>% distinct(GO, .keep_all = T) 
+GO_names
+```
+
+Look through for keywords that don't belong
+
+```{r}
+bad_GO <- GO_names %>% filter(!is.na(GO_term)) %>% filter(str_detect(GO_term, "aging|larval|nervous system|neur[oa]|behavior|mating|animal|glial|imaginal disc|wing|Schwann|cardiac|atrial|kidney|intestine|stomach|eye|retina|spleen|axon |myoblast|bone|osteo|male|MHC"))
+bad_GO
+```
+
+Where are these incorrect GO terms coming from (as in, which prediction tool)?
+
+```{r}
+swi %>% filter(str_detect(GO_sw, paste0(bad_GO$GO, collapse = "|")))
+eggnog %>% filter(str_detect(GOs, paste0(bad_GO$GO, collapse = "|")))
+interpro[,c(1,13)] %>% 
+  # group by transcriptID (as each has multiple lines)
+  group_by(Protein_accession) %>% 
+  # add a new column concatenating all that are in the same group, and remove the old GO column
+  mutate(GO = paste0(GO_annotations, collapse = ","), .keep = "unused") %>% 
+  # the previous step means that each duplicate will contain all the same data in the GO column, so now can delete duplicates
+  distinct(Protein_accession, .keep_all = T) %>% 
+  # clean up GO column to delete "NA", "-", and "|"
+  mutate(GO = str_remove_all(GO, "NA[,]*")) %>% 
+  mutate(GO = str_remove_all(GO, "-[,]*")) %>% 
+  mutate(GO = str_remove_all(GO, ",$")) %>% 
+  mutate(GO = str_replace_all(GO, "\\|", ",")) %>% 
+  filter(str_detect(GO, paste0(bad_GO$GO, collapse = "|")))
+```
+
+#### Remove problematic GO terms
+
+```{r}
+GO_clean <- GO_clean %>% 
+  # remove incorrect GO terms
+  mutate(GO = str_remove_all(GO, paste0(bad_GO$GO, collapse = "|"))) %>% 
+  # remove multiple commas
+  mutate(GO = str_replace_all(GO, ",[,]+", ","))
+GO_clean
+```
+
+```{r}
+write_tsv(GO_clean, "data_out/GO.tsv", na = "", col_names = F)
+```
+
+# GO analysis
+
+```{r}
+geneID2GO <- readMappings(file = "data_out/GO.tsv")
+str(head(geneID2GO))
+geneNames <- names(geneID2GO)
+```
+
+"Tests based on gene counts. This is the most popular family of tests, given that it only requires the presence of a list of interesting genes and nothing more. Tests like Fisher's exact test, Hypegeometric test and binomial test belong to this family."
+
+Why is there no FDR? Would result in too conservative an estimate (hardly any GO terms), doesn't take into account all the variables that went into determining the p-value (eg. go topology), and because the go terms aren't independent this kind of testing doesn't meet the assumptions of multiple testing correction
+
+https://bioconductor.org/packages/devel/bioc/vignettes/topGO/inst/doc/topGO.pdf
+
+```{r}
+whichTests()
+whichAlgorithms()
+```
+
+## Cluster from dtwclust
+
+```{r}
+sig_go_terms_t <- data.frame(GO.ID = character(), Term = character(), Annotated = integer(), Significant = integer(), Expected = double(), "Rank in classic" = integer(), classic = character(), elim = character(), weight = character(), Cluster = character())
+
+for (i in 1:length(unique(time_cluster$Cluster))) {
+  myInterestingGenes <- time_cluster$TranscriptId[time_cluster$Cluster == i]
+  geneList <- factor(as.integer(geneNames %in% myInterestingGenes))
+  names(geneList) <- geneNames
+  
+  GOdata <- new("topGOdata", ontology = "BP", allGenes = geneList, annot = annFUN.gene2GO, gene2GO = geneID2GO, nodeSize = 8)
+  
+  resultFis <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+  resultFisher <- runTest(GOdata, algorithm = "elim", statistic = "fisher")
+  resultWeight <- runTest(GOdata, algorithm = "weight", statistic = "fisher")
+  
+  allRes <- GenTable(GOdata, classic = resultFis, elim = resultFisher, weight = resultWeight, orderBy = "weight", ranksOf = "classic", topNodes = 25)
+  allRes$Cluster <- paste0("Cluster", i)
+  
+  sig_go_terms_t <- rbind(sig_go_terms_t, allRes)
+}
+
+sig_go_terms <- sig_go_terms_t %>% 
+  mutate(classic = as.numeric(classic)) %>% 
+  mutate(elim = as.numeric(elim)) %>% 
+  mutate(weight = as.numeric(weight)) %>% 
+  filter(elim < 0.01) %>% 
+  filter(weight < 0.01) %>% 
+  filter(classic < 0.01)
+
+sig_go_terms
+```
+
+```{r}
+write.csv(sig_go_terms, "data_out/Supplementary_data_2.csv", row.names = F)
+```
+
+## Make plots
+
+```{r fig.width = 5, fig.height = 2}
+colors <- c("#CC4C02", "#35254AFF", "#3493A8FF", "#FEC44F")
+
+names(colors) <- as.character(1:4)
+plot(seq_len(length(colors)), 
+     rep_len(1, length(colors)),
+     col = colors, 
+     pch = 16, 
+     cex = 6, 
+     xaxt = 'n', 
+     yaxt = 'n', 
+     xlab = '', 
+     ylab = '')
+```
+
+```{r}
+x <- sig_go_terms %>% 
+  group_by(Cluster) %>% 
+  mutate(Percentage_of_total = (Significant/Annotated)*100) %>% 
+  mutate(Term = str_replace(Term, "biosyn.*", "biosynthesis")) %>% 
+  mutate(Term = str_replace(Term, "metabol.*", "metabolism")) %>% 
+  mutate(Term = str_replace(Term, "involved.*", "")) %>% 
+  mutate(Term = str_replace(Term, "intracellular.*", "transport")) %>% 
+  mutate(Term = str_replace(Term, "via b.*", "transport"))
+```
+
+```{r fig.width = 9, fig.height = 8}
+plota <- x %>%
+ mutate(Cluster = str_extract(Cluster, "[0-9]+")) %>% 
+ mutate(Term = fct_reorder(Term, Cluster)) %>% 
+ ggplot() +
+  aes(x = Percentage_of_total, y = Term, fill = Cluster) +
+  geom_col() +
+  scale_fill_manual(values = colors) +
+  labs(x = "GO term representation within cluster (%)", size = "Count in cluster", y = "GO term") +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(fill = "none") +
+  scale_x_continuous(breaks = seq(0 , 80, 5), expand = c(0.005,0.005), limits = c(0,70)) +
+  theme(panel.grid.major.y = element_blank(), text = element_text(size = 12)) +
+  geom_vline(xintercept = c(10, 20, 30, 40, 50, 60), color = "grey", alpha = 0.4)
+
+plotb <- as.data.frame(table(time_cluster$Cluster)) %>% rename(Var1 = "Cluster", Freq = "Num_of_genes") %>% 
+  ggplot(.) +
+  aes(x = Cluster, y = Num_of_genes, fill = Cluster) +
+  geom_col() +
+  scale_fill_manual(values = colors) +
+  guides(fill = "none") +
+  theme_bw() +
+  labs(y = "Genes") +
+  scale_y_continuous(breaks = seq(0 , 3000, 500), expand = c(0.005,0.005))
+
+plotc <- de_genes %>% right_join(time_cluster,., by = "TranscriptId") %>% 
+  pivot_longer(3:ncol(.)) %>% 
+  mutate(time = str_extract(name, "[0-9]")) %>% 
+  mutate(Cluster = as.factor(Cluster)) %>% 
+  mutate(time = as.integer(time)) %>%
+  group_by(Cluster, time) %>%
+  mutate(m = mean(value)) %>% 
+  mutate(sd_min = m-sd(value)) %>% 
+  mutate(sd_max = m+sd(value)) %>% 
+  mutate(se_min = m-(sd(value)/sqrt(length(value)))) %>% 
+  mutate(se_max = m+(sd(value)/sqrt(length(value)))) %>% 
+  mutate(quan25 = quantile(value, prob=.25)) %>% 
+  mutate(quan75 = quantile(value, prob=.75)) %>%
+ggplot() +
+  aes(x = time, y = value, group = Cluster, color = Cluster, fill = Cluster, ymin = quan25, ymax = quan75) +
+  stat_summary(fun=mean, geom="line", linewidth = 1.5, alpha = 0.7) +
+  geom_ribbon(alpha = 0.2) +
+  scale_color_manual(values = colors) +
+  scale_fill_manual(values = colors) +
+  scale_x_continuous(breaks = seq(1 , 6, 1), expand = c(0.005,0.005)) +
+  labs(x = "Time", y = "log2 Fold Change", color = "Cluster") +
+  theme_bw() +
+  theme(legend.position="bottom", text = element_text(size = 12)) +
+  geom_hline(yintercept = 0, color = "black", linewidth = 1)
+
+
+grid.arrange(plota, arrangeGrob(plotb, plotc, heights = c(1,2)), ncol = 2, widths=c(2,1))
+```
+
+# What are the secondary metabolite biosynthesis genes?
+
+```{r}
+sec_met_go <- as.data.frame(GOTERM) %>% dplyr::select(2:3) %>% filter(str_detect(Term, "glucosinolate|terpe|anthoc")) %>% filter(!str_detect(Term, "catabol|nega|regul"))
+sec_met_go
+```
+
+```{r}
+sec_met <- read_tsv("data_out/GO.tsv", col_names = c("TranscriptId", "GO")) %>% 
+  filter(str_detect(GO, paste0(sec_met_go$go_id, collapse = "|"))) %>% 
+  left_join(pairwise_de) %>% 
+  left_join(time_cluster)#%>% filter(logFC_JAvsEt1 > 0 | logFC_JAvsEt2 > 0 | logFC_JAvsEt4 > 0 | logFC_JAvsEt6 > 0)
+sec_met$Cluster[is.na(sec_met$Cluster)] <- 0
+sec_met
+```
+
+```{r}
+sec_met_go_g <- as.data.frame(GOTERM) %>% dplyr::select(2:3) %>% filter(str_detect(Term, "glucosinolate")) %>% filter(!str_detect(Term, "catabol|negati"))
+sec_met_go_t <- as.data.frame(GOTERM) %>% dplyr::select(2:3) %>% filter(str_detect(Term, "terpen")) %>% filter(!str_detect(Term, "catabol|negati"))
+sec_met_go_a <- as.data.frame(GOTERM) %>% dplyr::select(2:3) %>% filter(str_detect(Term, "anthocya")) %>% filter(!str_detect(Term, "catabol|negati"))
+```
+
+```{r}
+sec_met <- sec_met %>%
+  mutate(Differentially_expressed = ifelse(FDR_JAvsEt1 < 0.01 | 
+                                            FDR_JAvsEt2 < 0.01 | 
+                                            FDR_JAvsEt4 < 0.01 | 
+                                            FDR_JAvsEt6 < 0.01, "Yes", "No")) %>% 
+  mutate(Differentially_expressed = coalesce(Differentially_expressed, "No")) %>% 
+  mutate(logFC_JAvsEt1 = ifelse(logFC_JAvsEt1 > 0 & Differentially_expressed == "Yes", "Upregulated", "Not Upregulated")) %>% 
+  mutate(logFC_JAvsEt1 = coalesce(logFC_JAvsEt1, "Not Upregulated")) %>%
+  mutate(logFC_JAvsEt2 = ifelse(logFC_JAvsEt2 > 0 & Differentially_expressed == "Yes", "Upregulated", "Not Upregulated")) %>% 
+  mutate(logFC_JAvsEt2 = coalesce(logFC_JAvsEt2, "Not Upregulated")) %>%
+  mutate(logFC_JAvsEt4 = ifelse(logFC_JAvsEt4 > 0 & Differentially_expressed == "Yes", "Upregulated", "Not Upregulated")) %>% 
+  mutate(logFC_JAvsEt4 = coalesce(logFC_JAvsEt4, "Not Upregulated")) %>%
+  mutate(logFC_JAvsEt6 = ifelse(logFC_JAvsEt6 > 0 & Differentially_expressed == "Yes", "Upregulated", "Not Upregulated")) %>% 
+  mutate(logFC_JAvsEt6 = coalesce(logFC_JAvsEt6, "Not Upregulated")) %>%
+  mutate(Glucosinolate_terms = ifelse(str_detect(GO, paste0(sec_met_go_g$go_id[1:5], collapse = "|")), "Yes", "No")) %>% 
+  mutate(Terpenoid_terms = ifelse(str_detect(GO, paste0(sec_met_go_t$go_id[1:5], collapse = "|")), "Yes", "No")) %>% 
+  mutate(Anthocyanin_terms = ifelse(str_detect(GO, paste0(sec_met_go_a$go_id[1:5], collapse = "|")), "Yes", "No")) %>% 
+  mutate(Upregulated_at_least_one_time_point = ifelse(logFC_JAvsEt1 == "Upregulated" |
+                                                      logFC_JAvsEt2 == "Upregulated" |
+                                                      logFC_JAvsEt4 == "Upregulated" |
+                                                      logFC_JAvsEt6 == "Upregulated", "Yes", "No")) %>% 
+  dplyr::select(c(TranscriptId, Differentially_expressed, Upregulated_at_least_one_time_point, Glucosinolate_terms, Terpenoid_terms, Anthocyanin_terms))
+
+sec_met
+```
+
+```{r}
+write_csv(sec_met, "data_out/Supplementary_data_4.csv")
+```
+
+## Heatmap of the logFC
+
+Note: this is scaled by row
+
+```{r fig.height = 12, fig.width = 6}
+pheatmap(de_genes[,2:5], color = viridis(31, direction = -1), cutree_rows = 1, show_rownames = F, scale = "row", angle_col = "90", cluster_cols = F, na_col = "red", main = "logFC of all differentially\nexpressed genes from the contrast\n(JAxh-JA0h)-(Etxh-Et0h)")
+```
+
+# Heatmap only Arabidopsis genes of interest
+
+## Get genes
+
+```{r}
+arab_genes <- read.fasta("JA_pathway/Araport11_pep_20220914_representative_gene_model.fa", as.string = T, seqtype = "AA", whole.header = T)
+arab_genes <- data.frame(TranscriptId = names(arab_genes), Seq = paste(arab_genes))
+arab_genes
+```
+
+```{r}
+arab_genes <- arab_genes %>% 
+  # filter out starting sequence
+  mutate(TranscriptId = str_extract(TranscriptId, "Symbols: [A-Za-z0-9, -.]*")) %>% 
+  # select only genes of interest
+  # looking for ones starting with whitespace, then gene name, then either a comma or whitespace followed by the end of the line
+  filter(str_detect(TranscriptId, paste0("\\s", read_csv("JA_pathway/genes.csv")$Gene, "|\\s", read_csv("JA_pathway/genes.csv")$Gene2, collapse = "|"))) %>% 
+  # get rid of "Symbols: "
+  mutate(TranscriptId = str_remove(TranscriptId, "Symbols: ")) %>% 
+  # extract just gene ID
+  mutate(TranscriptId = str_extract(TranscriptId, paste0(read_csv("JA_pathway/genes.csv")$Gene, "|", read_csv("JA_pathway/genes.csv")$Gene2, collapse = "|"))) %>% 
+  # remove extra commas
+  mutate(TranscriptId = str_remove(TranscriptId, ","))
+arab_genes
+```
+
+```{r}
+write.fasta(strsplit(arab_genes$Seq,""), arab_genes$TranscriptId, file = "JA_pathway/arab_proteins.fasta")
+```
+
+Command line for blast:
+
+```
+cd /home/kyrad/JA2022_RNAseq/arab_blast
+ln -s /home/kyrad/new_assembly/step7_genome_annotation/combined/annotations_combined_Nov2022_pep.fa
+
+# blast the known rips (happen to be amino acid sequences because that is what I have)
+blastp -query arab_proteins.fasta -subject annotations_combined_Nov2022_pep.fa -evalue 0.01 -outfmt 10 -out blast_out_arab.csv
+```
+
+```{r}
+de_JA <- read_csv("JA_pathway/blast_out_arab.csv", col_names = c("query", "TranscriptId", "percent_identical", "alignment_length", "number_mismatches", "gapopenings", "qstart", "qend", "sstart", "send", "evalue", "bitscore")) %>% 
+  # tidy TranscriptId
+  mutate(TranscriptId = str_remove(TranscriptId, "_[0-9]")) %>% 
+  # merge with logFC values
+  left_join(., de_genes, by = "TranscriptId") %>% 
+  # keep only those with high percent ID
+  filter(percent_identical > 50) %>% 
+  # keep only those with bit score > 40
+  filter(bitscore > 40) %>% 
+  # remove duplicate pokeweed genes (keep only the transcript IDs with the highest bit score)
+  arrange(desc(bitscore)) %>% 
+  arrange(desc(percent_identical)) %>% 
+  distinct(TranscriptId, .keep_all = T) %>% 
+  # concatenate arabidopsis name and pokeweed name
+  mutate(TID = paste0(query,"-",TranscriptId)) %>% 
+  column_to_rownames(var = "TID") %>% 
+  mutate_if(is.numeric, ~replace_na(., 0)) %>% 
+  group_by(query) %>% 
+  slice_max(percent_identical, n=10) %>% 
+  arrange(query) %>% 
+  mutate(TID = paste0(query,"-",TranscriptId)) %>% 
+  column_to_rownames(var = "TID")
+
+de_JA
+```
+
+```{r}
+write_csv(rownames_to_column(de_JA[,1:12], var = "TranscriptID"), "data_out/Supplementary_data_3.csv")
+```
+
+## Heatmap
+
+```{r}
+colors <- c(RColorBrewer::brewer.pal(7, "YlOrBr")[6:2], "white", mako(18, direction = -1))
+```
+
+```{r, fig.width = 4.1, fig.height = 15}
+de_JA %>% 
+  group_by(TranscriptId) %>% 
+  filter(sum(logFC_JAvsEt1,logFC_JAvsEt1,logFC_JAvsEt1,logFC_JAvsEt1)!=0) %>% 
+  mutate(TID = paste0(query,"-",TranscriptId)) %>% 
+  column_to_rownames(var = "TID") %>% 
+  dplyr::select(13:16) %>% 
+  pheatmap(., legend_breaks = c(-4:20), fontsize = 12, color = colors, cutree_rows = 1, show_rownames = T, angle_col = "90", cluster_cols = F, cluster_rows=F, main = "logFC of JA-related genes")
+```
+
