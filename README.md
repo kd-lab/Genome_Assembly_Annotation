@@ -1,4 +1,4 @@
-# Genome assembly and annotation scripts readme
+# Genome assembly and annotation scripts/code
 
 ## Check quality of reads
 
@@ -310,122 +310,7 @@ nohup blastp -db swissprot -query annotations_combined_pep.fa -evalue 1e-50 -out
 
 ## Combine GO terms in R
 
-Combine interproscan, eggnog, and blast results
-
-```r
-interpro <- read_tsv("interpro-blast/annotations_combined_pep.fa.tsv", col_names = c("Protein_accession", "Sequence_MD5_digest", "Sequence_length", "Analysis", "Signature_accession", "Signature_description", "Start_location", "Stop_location", "Evalue", "Status_of_match", "Date", "InterPro_annotations", "InterPro_annotation_description", "GO_annotations", "Pathways_annotations")) %>% 
-  mutate(Protein_accession = str_remove(Protein_accession, "_[0-9]")) %>% 
-  dplyr::select(!c(Sequence_MD5_digest,Pathways_annotations))
-swi <- read_csv("blast_swiss_annotations_combined.csv", col_names = NULL) %>% 
-  # select only top hit
-  # group by transcript id
-  group_by(X1) %>% 
-  # select hit with lowest evalue
-  dplyr::slice(which.min(X11)) %>% 
-  # select the transcrtipt id and associated swissprot accession
-  dplyr::select(c(X1, X2)) %>% 
-  dplyr::rename("Protein_accession" = X1, "Entry" = X2) %>% 
-  mutate(Protein_accession = str_remove(Protein_accession, "_[0-9]"))
-write(paste(unique(swi$Entry), collapse = " "), "data_out/swissprot_hits.txt")
-```
-
-1. go to https://www.uniprot.org/id-mapping and load the text file
-2. select from: UniProtKB_AC-ID     to: UniProtKB-Swiss-Prot
-3. select the results when loaded
-4. click 'customize columns' deselect all defaults, and select 'gene ontology IDs', "gene names", and "descriptions"
-5. download results as tsv, uncompressed
-6. rename to "get_swissprot_go.tsv"
-
-```r
-temp <- read_tsv("data_in/get_swissprot_go.tsv") %>% dplyr::select(c(From, Gene_Ontology_IDs)) %>% dplyr::rename("Entry" = From, "GO_sw" = "Gene_Ontology_IDs")
-
-head(temp)
-#check for improper concatenation
-temp %>% filter(str_detect(GO_sw, "[0-9]GO"))
-swi <- full_join(swi, temp, by = "Entry") %>% mutate(GO_sw = str_replace_all(GO_sw, "; ", ",")) %>% dplyr::select(!Entry) %>% mutate(GO_sw = ifelse(is.na(GO_sw), "", GO_sw))
-#check for improper concatenation
-swi %>% filter(str_detect(GO_sw, "[0-9]GO"))
-```
-
-add eggNOG
-
-```r
-eggnog <- read_tsv("C:/Users/Kyra/Desktop/Masters/improve_genome/interpro-blast/eggnog.tsv", comment = "#") %>% 
-  dplyr::select(c(Protein_accession, GOs)) %>% 
-  mutate(Protein_accession = str_remove(Protein_accession, "_[0-9]")) %>% 
-  mutate(GOs = str_remove(GOs, "-"))
-#check for improper concatenation
-eggnog %>% filter(str_detect(GOs, "[0-9]GO"))
-```
-
-get GO terms per transcript
-
-```r
-GO_clean <- interpro[,c(1,13)] %>% 
-  # group by transcriptID (as each has multiple lines)
-  group_by(Protein_accession) %>% 
-  # add a new column concatenating all that are in the same group, and remove the old GO column
-  mutate(GO = paste0(GO_annotations, collapse = ","), .keep = "unused") %>% 
-  # the previous step means that each duplicate will contain all the same data in the GO column, so now can delete duplicates
-  distinct(Protein_accession, .keep_all = T) %>% 
-  # clean up GO column to delete "NA", "-", and "|"
-  mutate(GO = str_remove_all(GO, "NA[,]*")) %>% 
-  mutate(GO = str_remove_all(GO, "-[,]*")) %>% 
-  mutate(GO = str_remove_all(GO, ",$")) %>% 
-  mutate(GO = str_replace_all(GO, "\\|", ","))
-#check for improper concatenation
-GO_clean %>% filter(str_detect(GO, "[0-9]GO"))
-```
-
-Combine
-
-```r
-GO_clean <- left_join(GO_clean, eggnog, by = "Protein_accession")
-
-GO_clean <- full_join(GO_clean, swi, by = "Protein_accession") %>% 
-  # convert added NAs to blanks
-  replace(is.na(.), "")
-GO_clean <- GO_clean %>% 
-  #mutate(GO = paste0(GO, GOs, GO_sw, collapse = ",")) %>% 
-  #mutate(GO = paste0(GO, GOs, collapse = ",")) %>%
-  unite("GO", c(GO, GOs, GO_sw), sep = ",", remove = T) %>% 
-  # remove extra commas
-  # doubles
-  mutate(GO = str_replace(GO, ",,", ",")) %>% 
-  # at start
-  mutate(GO = str_remove(GO, "^,")) %>% 
-  # at end
-  mutate(GO = str_remove(GO, ",$")) %>% 
-  # remove go_sw and GOs now that part of GO
-  #dplyr::select(c(Protein_accession, GO)) %>% 
-  # split cleaned GO terms for removal of duplicates (next step)
-  mutate(GO_str = strsplit(GO, ","))
-#check for improper concatenation
-GO_clean %>% filter(str_detect(GO, "[0-9]GO"))
-Get rid of duplicate GO terms, refine
-for (i in 1:nrow(GO_clean)){
-  GO_clean$GO[i] <- paste0(unique(unlist(GO_clean$GO_str[i])), collapse = ",")
-}
-
-GO_clean <- GO_clean %>% 
-  # convert blanks to NAs
-  mutate_all(na_if,"") %>% 
-  # remove GO_str
-  dplyr::select(!GO_str)
-GO_names <- GO_clean$GO[!is.na(GO_clean$GO)]
-GO_names <- paste0(GO_names, collapse = ",")
-GO_names <- strsplit(GO_names, ",")
-GO_names <- as.data.frame(GO_names, col.names = "GO")
-GO_names <- as.data.frame(Term(GOTERM)) %>% rename("Term(GOTERM)" = "GO_term") %>% rownames_to_column(var = "GO") %>% left_join(GO_names, ., by = "GO") %>% distinct(GO, .keep_all = T) 
-bad_GO <- GO_names %>% filter(!is.na(GO_term)) %>% filter(str_detect(GO_term, "aging|larval|nervous system|neur[oa]|behavior|mating|animal|glial|imaginal disc|wing|Schwann|cardiac|atrial|kidney|intestine|stomach|eye|retina|spleen|axon |myoblast|bone|osteo|male|MHC"))
-
-GO_clean <- GO_clean %>% 
-  # remove incorrect GO terms
-  mutate(GO = str_remove_all(GO, paste0(bad_GO$GO, collapse = "|"))) %>% 
-  # remove multiple commas
-  mutate(GO = str_replace_all(GO, ",[,]+", ","))
-write_tsv(GO_clean, "data_out/GO.tsv", na = "", col_names = F)
-```
+[See this R markdown file for all R code](https://github.com/kd-lab/Genome_Assembly_Annotation/blob/main/R_code.rmd)
 
 ---
 
@@ -494,3 +379,4 @@ for i in *A*Aligned_sorted.bam; do htseq-count -m union -s yes -r pos -i Parent 
 
 ## Differential expression analysis in R
 
+[See this R markdown file for all R code](https://github.com/kd-lab/Genome_Assembly_Annotation/blob/main/R_code.rmd)
