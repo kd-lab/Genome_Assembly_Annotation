@@ -40,6 +40,12 @@ awk '/^S/{print ">"$2;print $3}' output.a_ctg.gfa > alternate_assembly.fa
 
 ## Check quality of initial assembly
 
+Count length of each contig
+```bash
+cd /step3_hifiasm
+awk 'BEGIN{FS="[> ]"} /^>/{val=$2;next}  {print val,length($0)}'   primary_assembly.fa > seq_lengths.tsv
+```
+
 ```bash
 cd /step4_quality
 quast --pacbio /data/hifi_reads.fastq --labels Primary_assembly,Alternate_assembly -o quast_out --est-ref-size 1184000000 --eukaryote --min-contig 500 --min-alignment 65 --min-identity 95.0 --ambiguity-usage 'one' --ambiguity-score '0.99' --contig-thresholds '0,1000' --extensive-mis-size 1000 --scaffold-gap-max-size 1000 --unaligned-part-size 500 /step3_hifiasm/primary_assembly.fa /step3_hifiasm/alternate_assembly.fa --threads 16
