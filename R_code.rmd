@@ -24,8 +24,9 @@ library(viridis)
 library(gridExtra)
 library(seqinr)
 library(topGO)
+library(GO.db)
 library(dtwclust)
-library(VennDiagram)
+library(UpSetR)
 ```
 
 ```{r}
@@ -34,11 +35,12 @@ sessionInfo()
 
 Output:
 ```
-R version 4.2.2 (2022-10-31 ucrt)
+R version 4.3.1 (2023-06-16 ucrt)
 Platform: x86_64-w64-mingw32/x64 (64-bit)
 Running under: Windows 10 x64 (build 19045)
 
 Matrix products: default
+
 
 Random number generation:
  RNG:     L'Ecuyer-CMRG 
@@ -46,41 +48,119 @@ Random number generation:
  Sample:  Rejection 
  
 locale:
-[1] LC_COLLATE=English_United States.utf8  LC_CTYPE=English_United States.utf8    LC_MONETARY=English_United States.utf8
-[4] LC_NUMERIC=C                           LC_TIME=English_United States.utf8    
+[1] LC_COLLATE=English_United States.utf8 
+[2] LC_CTYPE=English_United States.utf8   
+[3] LC_MONETARY=English_United States.utf8
+[4] LC_NUMERIC=C                          
+[5] LC_TIME=English_United States.utf8    
+
+time zone: America/Halifax
+tzcode source: internal
 
 attached base packages:
-[1] grid      stats4    stats     graphics  grDevices utils     datasets  methods   base     
+[1] stats4    stats     graphics  grDevices
+[5] utils     datasets  methods   base     
 
 other attached packages:
- [1] VennDiagram_1.7.3    futile.logger_1.4.3  dtwclust_5.5.11      dtw_1.23-1           proxy_0.4-27         topGO_2.50.0        
- [7] SparseM_1.81         GO.db_3.16.0         AnnotationDbi_1.60.0 IRanges_2.32.0       S4Vectors_0.36.0     Biobase_2.58.0      
-[13] graph_1.76.0         BiocGenerics_0.44.0  seqinr_4.2-23        gridExtra_2.3        viridis_0.6.2        viridisLite_0.4.1   
-[19] pheatmap_1.0.12      forcats_0.5.2        stringr_1.5.0        dplyr_1.0.10         purrr_0.3.5          readr_2.1.3         
-[25] tidyr_1.2.1          tibble_3.1.8         ggplot2_3.4.0        tidyverse_1.3.2      edgeR_3.40.0         limma_3.54.0        
+ [1] UpSetR_1.4.0         seqinr_4.2-30       
+ [3] gridExtra_2.3        viridis_0.6.4       
+ [5] viridisLite_0.4.2    pheatmap_1.0.12     
+ [7] lubridate_1.9.3      forcats_1.0.0       
+ [9] stringr_1.5.0        dplyr_1.1.3         
+[11] purrr_1.0.2          readr_2.1.4         
+[13] tidyr_1.3.0          tibble_3.2.1        
+[15] ggplot2_3.4.4        tidyverse_2.0.0     
+[17] topGO_2.52.0         SparseM_1.81        
+[19] GO.db_3.17.0         AnnotationDbi_1.62.2
+[21] IRanges_2.34.1       S4Vectors_0.38.2    
+[23] Biobase_2.60.0       graph_1.78.0        
+[25] BiocGenerics_0.46.0  edgeR_3.42.4        
+[27] limma_3.56.2         dtwclust_5.5.12     
+[29] dtw_1.23-1           proxy_0.4-27        
 
 loaded via a namespace (and not attached):
-  [1] googledrive_2.0.0      colorspace_2.0-3       ellipsis_0.3.2         class_7.3-20           modeltools_0.2-23     
-  [6] XVector_0.38.0         fs_1.5.2               clue_0.3-63            rstudioapi_0.14        ggrepel_0.9.2         
- [11] bit64_4.0.5            RSpectra_0.16-1        fansi_1.0.3            lubridate_1.9.0        xml2_1.3.3            
- [16] codetools_0.2-18       cachem_1.0.6           knitr_1.41             ade4_1.7-20            jsonlite_1.8.3        
- [21] broom_1.0.1            cluster_2.1.4          dbplyr_2.2.1           png_0.1-8              shiny_1.7.3           
- [26] compiler_4.2.2         httr_1.4.4             backports_1.4.1        assertthat_0.2.1       Matrix_1.5-3          
- [31] fastmap_1.1.0          gargle_1.2.1           cli_3.4.1              formatR_1.12           later_1.3.0           
- [36] htmltools_0.5.3        tools_4.2.2            gtable_0.3.1           glue_1.6.2             GenomeInfoDbData_1.2.9
- [41] reshape2_1.4.4         Rcpp_1.0.9             cellranger_1.1.0       vctrs_0.5.1            Biostrings_2.66.0     
- [46] iterators_1.0.14       xfun_0.35              rvest_1.0.3            timechange_0.1.1       mime_0.12             
- [51] lifecycle_1.0.3        googlesheets4_1.0.1    MASS_7.3-58.1          zlibbioc_1.44.0        scales_1.2.1          
- [56] hms_1.1.2              promises_1.2.0.1       parallel_4.2.2         lambda.r_1.2.4         RColorBrewer_1.1-3    
- [61] yaml_2.3.6             memoise_2.0.1          stringi_1.7.8          RSQLite_2.2.19         foreach_1.5.2         
- [66] GenomeInfoDb_1.34.3    rlang_1.0.6            pkgconfig_2.0.3        matrixStats_0.63.0     bitops_1.0-7          
- [71] evaluate_0.18          lattice_0.20-45        bit_4.0.5              tidyselect_1.2.0       plyr_1.8.8            
- [76] magrittr_2.0.3         R6_2.5.1               generics_0.1.3         DBI_1.1.3              withr_2.5.0           
- [81] pillar_1.8.1           haven_2.5.1            KEGGREST_1.38.0        RCurl_1.98-1.9         modelr_0.1.10         
- [86] crayon_1.5.2           futile.options_1.0.1   utf8_1.2.2             tzdb_0.3.0             rmarkdown_2.18        
- [91] readxl_1.4.1           locfit_1.5-9.6         flexclust_1.4-1        blob_1.2.3             reprex_2.0.2          
- [96] digest_0.6.30          xtable_1.8-4           httpuv_1.6.6           RcppParallel_5.1.5     munsell_0.5.0         
-[101] shinyjs_2.1.0
+ [1] DBI_1.1.3              
+ [2] bitops_1.0-7           
+ [3] rlang_1.1.1            
+ [4] magrittr_2.0.3         
+ [5] ade4_1.7-22            
+ [6] clue_0.3-65            
+ [7] flexclust_1.4-1        
+ [8] matrixStats_1.0.0      
+ [9] compiler_4.3.1         
+[10] RSQLite_2.3.1          
+[11] png_0.1-8              
+[12] vctrs_0.6.4            
+[13] reshape2_1.4.4         
+[14] pkgconfig_2.0.3        
+[15] crayon_1.5.2           
+[16] fastmap_1.1.1          
+[17] XVector_0.40.0         
+[18] ellipsis_0.3.2         
+[19] utf8_1.2.3             
+[20] promises_1.2.1         
+[21] rmarkdown_2.25         
+[22] tzdb_0.4.0             
+[23] bit_4.0.5              
+[24] xfun_0.40              
+[25] modeltools_0.2-23      
+[26] zlibbioc_1.46.0        
+[27] cachem_1.0.8           
+[28] GenomeInfoDb_1.36.4    
+[29] blob_1.2.4             
+[30] later_1.3.1            
+[31] parallel_4.3.1         
+[32] cluster_2.1.4          
+[33] R6_2.5.1               
+[34] stringi_1.7.12         
+[35] RColorBrewer_1.1-3     
+[36] Rcpp_1.0.11            
+[37] iterators_1.0.14       
+[38] knitr_1.44             
+[39] timechange_0.2.0       
+[40] httpuv_1.6.11          
+[41] Matrix_1.5-4.1         
+[42] tidyselect_1.2.0       
+[43] rstudioapi_0.15.0      
+[44] yaml_2.3.7             
+[45] codetools_0.2-19       
+[46] lattice_0.21-8         
+[47] plyr_1.8.9             
+[48] shiny_1.7.5.1          
+[49] withr_2.5.1            
+[50] KEGGREST_1.40.1        
+[51] evaluate_0.22          
+[52] RcppParallel_5.1.7     
+[53] Biostrings_2.68.1      
+[54] pillar_1.9.0           
+[55] foreach_1.5.2          
+[56] shinyjs_2.1.0          
+[57] generics_0.1.3         
+[58] RCurl_1.98-1.12        
+[59] hms_1.1.3              
+[60] munsell_0.5.0          
+[61] scales_1.2.1           
+[62] xtable_1.8-4           
+[63] class_7.3-22           
+[64] glue_1.6.2             
+[65] tools_4.3.1            
+[66] RSpectra_0.16-1        
+[67] locfit_1.5-9.8         
+[68] grid_4.3.1             
+[69] colorspace_2.1-0       
+[70] GenomeInfoDbData_1.2.10
+[71] cli_3.6.1              
+[72] fansi_1.0.5            
+[73] gtable_0.3.4           
+[74] digest_0.6.33          
+[75] ggrepel_0.9.4          
+[76] memoise_2.0.1          
+[77] htmltools_0.5.6.1      
+[78] lifecycle_1.0.3        
+[79] httr_1.4.7             
+[80] mime_0.12              
+[81] MASS_7.3-60            
+[82] bit64_4.0.5
 ```
 
 
@@ -198,6 +278,7 @@ for (i in 1:30){
 
 What is MDS plot? Visualization of the differences between the expression profiles of different samples in two dimensions. It does this by calculating the relative distance between samples as a distance matrix.
 
+Note: this is Supplementary Figure S4
 ```{r fig.width = 6, fig.height = 6.5}
 points <- c(0,1,2,3,4,15,16,17,18,19)
 colors <- rep(c("#b37d36", "#36b37e", "#3668b3", "#6e36b3", "#b33670"), 3)
@@ -296,7 +377,7 @@ pairwise_de
 Write to file
 
 ```{r}
-write.csv(pairwise_de, "data_out/Supplementary_data_1.csv", row.names = F)
+write.csv(pairwise_de, "data_out/Supporting_Data_S2.csv", row.names = F)
 ```
 
 ## Select differentially expressed genes (FDR < 0.01 in at least one pairwise comparison)
@@ -333,13 +414,6 @@ scaledata_fc <- scaledata_fc[complete.cases(scaledata_fc),]
 head(as.data.frame(scaledata_fc), n=10)
 paste("Scaled data range: ", round(min(scaledata_fc),2), "-", round(max(scaledata_fc),2))
 paste("Number of transcripts after scaling:", nrow(scaledata_fc))
-
-as.data.frame(scaledata_fc) %>% rownames_to_column() %>% pivot_longer(2:5) %>% 
-  ggplot(.) +
-  aes(x = value, fill = name) +
-  geom_density(adjust = 0.5, alpha = 0.7) +
-  scale_fill_brewer(palette = "BuPu") +
-  theme_bw()
 ```
 
 ## dtwclust
@@ -348,8 +422,6 @@ as.data.frame(scaledata_fc) %>% rownames_to_column() %>% pivot_longer(2:5) %>%
 
 ```{r}
 set.seed(124)
-#scaledata_t_sub <- scaledata_fc[sample(nrow(scaledata_fc),2000),]
-#scaledata_t <- de_genes[1:1000,] %>% column_to_rownames(var = "TranscriptId")
 scaledata_t <- scaledata_fc
 colnames(scaledata_t) <- c(1,2,4,6)
 scaledata_t <- tslist(scaledata_t, simplify=T)
@@ -379,6 +451,7 @@ cluster_tad_k6 <- tsclust(series = scaledata_t, type = "tadpole", k = 6, preproc
 cluster_tad_k8 <- tsclust(series = scaledata_t, type = "tadpole", k = 8, preproc = NULL, args = tsclust_args(), seed = 1245, trace = T, error.check = T, control = tadpole_control(dc = 1, window.size = 1))
 cluster_tad_k10 <- tsclust(series = scaledata_t, type = "tadpole", k = 10, preproc = NULL, args = tsclust_args(), seed = 1245, trace = T, error.check = T, control = tadpole_control(dc = 1, window.size = 1))
 ```
+
 Crisp partitions
 
 – "Sil" (!): Silhouette index (Rousseeuw (1987); to be maximized).
@@ -564,6 +637,50 @@ How many genes?
 length(unique(interpro$Protein_accession))
 ```
 
+Distribution of genes per contig
+
+```{r}
+gff3 <- read_tsv("data_in/annotations_combined.gff3", col_names = NULL, comment = "#")
+filter(gff3, X3 == "transcript")
+
+top_contigs <- read_delim("data_in/seq_lengths.tsv", delim = " ", col_names = F) %>% 
+  arrange(desc(X2))
+top_contigs
+```
+
+Output:
+```
+ptg000001l	51110158		
+ptg000033l	32623551		
+ptg000031l	29529208		
+ptg000053l	28467466		
+ptg000005l	25785398		
+ptg000019l	25264053		
+ptg000009l	24533512		
+ptg000014l	23505251		
+ptg000030l	23301990		
+ptg000036l	22950366
+...
+```
+
+```{r}
+paste("Total genes:", nrow(filter(gff3, X3 == "transcript")))
+
+paste("Number of genes in top 100 largest contigs:", sum(str_detect(gff3$X1[gff3$X3 == "transcript"], paste0(top_contigs$X1[1:100], collapse = "|")), na.rm = T))
+
+paste("Number of genes in top 51 largest contigs (this is the L75 number):", sum(str_detect(gff3$X1[gff3$X3 == "transcript"], paste0(top_contigs$X1[1:51], collapse = "|")), na.rm = T))
+
+paste("Number of genes in top 46 largest contigs (this is the L50 number):", sum(str_detect(gff3$X1[gff3$X3 == "transcript"], paste0(top_contigs$X1[1:26], collapse = "|")), na.rm = T))
+```
+
+Output
+```
+[1] "Total genes: 34107"
+[1] "Number of genes in top 100 largest contigs: 33410"
+[1] "Number of genes in top 51 largest contigs (this is the L75 number): 27667"
+[1] "Number of genes in top 46 largest contigs (this is the L50 number): 18332"
+```
+
 # Refine GO annotations
 
 ## Add blast results against swissprot
@@ -608,18 +725,6 @@ swi
 swi %>% filter(str_detect(GO_sw, "[0-9]GO"))
 ```
 
-## Add eggnog annotations
-
-```{r}
-eggnog <- read_tsv("data_in/eggnog.tsv", comment = "#") %>% 
-  dplyr::select(c(Protein_accession, GOs)) %>% 
-  mutate(Protein_accession = str_remove(Protein_accession, "_[0-9]")) %>% 
-  mutate(GOs = str_remove(GOs, "-"))
-eggnog
-#check for improper concatenation
-eggnog %>% filter(str_detect(GOs, "[0-9]GO"))
-```
-
 ## Get GO terms per transcript
 
 ```{r}
@@ -640,18 +745,14 @@ GO_clean
 GO_clean %>% filter(str_detect(GO, "[0-9]GO"))
 ```
 
-### Combine with swissprot and eggnog GO
+### Combine with swissprot
 
 ```{r}
-GO_clean <- left_join(GO_clean, eggnog, by = "Protein_accession")
-
 GO_clean <- full_join(GO_clean, swi, by = "Protein_accession") %>% 
   # convert added NAs to blanks
   replace(is.na(.), "")
 GO_clean <- GO_clean %>% 
-  #mutate(GO = paste0(GO, GOs, GO_sw, collapse = ",")) %>% 
-  #mutate(GO = paste0(GO, GOs, collapse = ",")) %>%
-  unite("GO", c(GO, GOs, GO_sw), sep = ",", remove = T) %>% 
+  unite("GO", c(GO, GO_sw), sep = ",", remove = T) %>% 
   # remove extra commas
   # doubles
   mutate(GO = str_replace(GO, ",,", ",")) %>% 
@@ -659,7 +760,7 @@ GO_clean <- GO_clean %>%
   mutate(GO = str_remove(GO, "^,")) %>% 
   # at end
   mutate(GO = str_remove(GO, ",$")) %>% 
-  # remove go_sw and GOs now that part of GO
+  # remove go_sw now that part of GO
   #dplyr::select(c(Protein_accession, GO)) %>% 
   # split cleaned GO terms for removal of duplicates (next step)
   mutate(GO_str = strsplit(GO, ","))
@@ -705,7 +806,6 @@ Where are these incorrect GO terms coming from (as in, which prediction tool)?
 
 ```{r}
 swi %>% filter(str_detect(GO_sw, paste0(bad_GO$GO, collapse = "|")))
-eggnog %>% filter(str_detect(GOs, paste0(bad_GO$GO, collapse = "|")))
 interpro[,c(1,13)] %>% 
   # group by transcriptID (as each has multiple lines)
   group_by(Protein_accession) %>% 
@@ -733,13 +833,13 @@ GO_clean
 ```
 
 ```{r}
-write_tsv(GO_clean, "data_out/GO.tsv", na = "", col_names = F)
+write_tsv(GO_clean, "data_out/Supporting_Data_S1.tsv", na = "", col_names = F)
 ```
 
 # GO analysis
 
 ```{r}
-geneID2GO <- readMappings(file = "data_out/GO.tsv")
+geneID2GO <- readMappings(file = "data_out/Supporting_Data_S1.tsv")
 str(head(geneID2GO))
 geneNames <- names(geneID2GO)
 ```
@@ -789,7 +889,7 @@ sig_go_terms
 ```
 
 ```{r}
-write.csv(sig_go_terms, "data_out/Supplementary_data_2.csv", row.names = F)
+write.csv(sig_go_terms, "data_out/Supporting_Data_S5.csv", row.names = F)
 ```
 
 ## Make plots
@@ -828,11 +928,11 @@ plota <- x %>%
   aes(x = Percentage_of_total, y = Term, fill = Cluster) +
   geom_col() +
   scale_fill_manual(values = colors) +
-  labs(x = "GO term representation within cluster (%)", size = "Count in cluster", y = "GO term") +
+  labs(x = "GO term representation\nwithin cluster (%)", size = "Count in cluster", y = "GO term") +
   theme_bw() +
   theme(legend.position="bottom") +
   guides(fill = "none") +
-  scale_x_continuous(breaks = seq(0 , 80, 5), expand = c(0.005,0.005), limits = c(0,70)) +
+  scale_x_continuous(breaks = seq(0 , 80, 5), expand = c(0.005,0.005), limits = c(0,75)) +
   theme(panel.grid.major.y = element_blank(), text = element_text(size = 12)) +
   geom_vline(xintercept = c(10, 20, 30, 40, 50, 60), color = "grey", alpha = 0.4)
 
@@ -866,7 +966,7 @@ ggplot() +
   scale_color_manual(values = colors) +
   scale_fill_manual(values = colors) +
   scale_x_continuous(breaks = seq(1 , 6, 1), expand = c(0.005,0.005)) +
-  labs(x = "Time", y = "log2 Fold Change", color = "Cluster") +
+  labs(x = "Time (hours)", y = "log2 Fold Change", color = "Cluster") +
   theme_bw() +
   theme(legend.position="bottom", text = element_text(size = 12)) +
   geom_hline(yintercept = 0, color = "black", linewidth = 1)
@@ -875,65 +975,178 @@ ggplot() +
 grid.arrange(plota, arrangeGrob(plotb, plotc, heights = c(1,2)), ncol = 2, widths=c(2,1))
 ```
 
+```{r}
+png(width=9, height=8, units="in", res=300, file="data_out/Figure1.png")
+grid.arrange(plota, arrangeGrob(plotb, plotc, heights = c(1,2)), ncol = 2, widths=c(2,1))
+dev.off()
+```
+
 # What are the secondary metabolite biosynthesis genes?
 
+## Secondary metabolites
 ```{r}
-sec_met_go <- as.data.frame(GOTERM) %>% dplyr::select(2:3) %>% filter(str_detect(Term, "glucosinolate|terpe|anthoc")) %>% filter(!str_detect(Term, "catabol|nega|regul"))
+sec_met_go <- as.data.frame(GOTERM) %>% dplyr::select(2:3) %>% filter(str_detect(Term, "terpen|plant volatile|sterol|caroten|saponin|glycoside|phenolic |anthocyani|flav[ao]n|lign[ia]n|coumarin|stilben|tannin|hydroxycinnamate|chalcone|alkaloid|glucosinol|cyanogenic glycoside|phytoalexin|thiosulfinate|pyrrol[i]*|quinoline|pyridine|piperidine|tropane|aporphine|isoquinoline|indolizidine|norlupinane|indole.*purine|purine.*indole|steroid|imidazole")) %>% 
+  filter(!str_detect(Term, "catabol|nega|regul|metabol|cholesterol|ergosterol|ergot|lanosterol|steroid hormone secretion|steroid-lactonase activity"))
+# note: although present in these GO terms, "corticosteroid" and "ecdysteroid" are not present in our pokeweed annotations
+# add column specifying what type it is
+sec_met_go$Product <- ifelse(str_detect(sec_met_go$Term, "terpen|plant volatile|sterol|caroten|saponin|glycoside"), "Terpenoids",
+                                     ifelse(str_detect(sec_met_go$Term, "phenolic |anthocyani|flav[ao]n|lign[ia]n|coumarin|stilben|tannin|hydroxycinnamate|chalcone"), "Phenolic Compounds",
+                                            ifelse(str_detect(sec_met_go$Term, "alkaloid|glucosinol|cyanogenic glycoside|phytoalexin|thiosulfinate|pyrrol[i]*|quinoline|pyridine|piperidine|tropane"), "Nitrogen-sulfur Compounds", NA)))
+
+# add sub_type column
+sec_met_go$Sub_type <- ifelse(str_detect(sec_met_go$Term, "terpen"), "Terpenes", ifelse(str_detect(sec_met_go$Term, "plant volatile"), "Plant volatile", ifelse(str_detect(sec_met_go$Term, "sterol"), "Sterols", ifelse(str_detect(sec_met_go$Term, "caroten"), "Carotenoids", ifelse(str_detect(sec_met_go$Term, "saponin"), "Saponins", ifelse(str_detect(sec_met_go$Term, "glycoside"), "Glycosides", ifelse(str_detect(sec_met_go$Term, "anthocyan"), "Anthocyanin", ifelse(str_detect(sec_met_go$Term, "flav[ao]n|anthocyanidin|chalcon"), "Flavonoids", ifelse(str_detect(sec_met_go$Term, "phenolic |hydroxycinnamate|phenylethanoid"), "Phenolics", ifelse(str_detect(sec_met_go$Term, "lign[ia]n"), "Lignin/lignan", ifelse(str_detect(sec_met_go$Term, "coumarin"), "Coumarins", ifelse(str_detect(sec_met_go$Term, "stilben"), "Stilbenes", ifelse(str_detect(sec_met_go$Term, "tannin"), "Tannins",   ifelse(str_detect(sec_met_go$Term, "alkaloid|pyrrol[i]*|quinoline|pyridine|piperidine|tropane"), "Alkaloids", ifelse(str_detect(sec_met_go$Term, "glucosin"), "Glucosinolates", ifelse(str_detect(sec_met_go$Term, "cyanogenic glycoside"), "Cyanogenic glycoside", ifelse(str_detect(sec_met_go$Term, "phytoalexin"), "Phytoalexins", ifelse(str_detect(sec_met_go$Term, "thiosulfinate"), "Thiosulfinate", NA))))))))))))))))))
+
 sec_met_go
 ```
 
 ```{r}
-sec_met <- read_tsv("data_out/GO.tsv", col_names = c("TranscriptId", "GO")) %>% 
-  filter(str_detect(GO, paste0(sec_met_go$go_id, collapse = "|"))) %>% 
-  left_join(pairwise_de) %>% 
-  left_join(time_cluster)#%>% filter(logFC_JAvsEt1 > 0 | logFC_JAvsEt2 > 0 | logFC_JAvsEt4 > 0 | logFC_JAvsEt6 > 0)
+sec_met <- read_tsv("data_out/Supporting_Data_S1.tsv", col_names = c("TranscriptId", "GO")) %>% 
+  # select just terms of interest from pokeweed annotations
+  filter(str_detect(GO, paste0(sec_met_go$go_id, collapse = "|")))
+sec_met
+```
+
+
+```{r}
+sec_met <- sec_met %>% 
+  # split GO terms
+  separate_wider_delim(cols = GO, delim = ",", names_sep = "", too_few = "align_start") %>% 
+  # put each GO term on own column
+  pivot_longer(contains("GO"), values_to = "go_id") %>% 
+  # remove NAs
+  filter(!is.na(go_id)) %>% 
+  # remove uneeded 'name' column (artifact of separating)
+  dplyr::select(!name) %>% 
+  # join to GO descriptions
+  left_join(sec_met_go, by = "go_id") %>% 
+  # remove rows with no relevant GO term
+  filter(!is.na(Product)) %>% 
+  # remove duplicate sub-type entries for single gene
+  group_by(Sub_type, TranscriptId) %>% 
+  distinct(Sub_type, .keep_all = T) %>% 
+  # add DE data
+  left_join(de_genes3) %>% left_join(time_cluster) %>% 
+  # put all logFC in one column 
+  pivot_longer(contains("logFC"), names_to = "Time", values_to = "logFC") %>% 
+  # convert contrast names to just be time
+  mutate(Time = as.numeric(str_extract(Time, "[0-9]")))
+# if NA then it is not DE
+sec_met$DE <- ifelse(is.na(sec_met$Cluster),"No", "Yes")
+# replace NAs with 0
 sec_met$Cluster[is.na(sec_met$Cluster)] <- 0
+sec_met$logFC[is.na(sec_met$logFC)] <- 0
 sec_met
 ```
-
+How many have multiple relevant terms?
 ```{r}
-sec_met_go_g <- as.data.frame(GOTERM) %>% dplyr::select(2:3) %>% filter(str_detect(Term, "glucosinolate")) %>% filter(!str_detect(Term, "catabol|negati"))
-sec_met_go_t <- as.data.frame(GOTERM) %>% dplyr::select(2:3) %>% filter(str_detect(Term, "terpen")) %>% filter(!str_detect(Term, "catabol|negati"))
-sec_met_go_a <- as.data.frame(GOTERM) %>% dplyr::select(2:3) %>% filter(str_detect(Term, "anthocya")) %>% filter(!str_detect(Term, "catabol|negati"))
+as.data.frame(table(sec_met$TranscriptId)) %>% arrange(desc(Freq)) %>% 
+  # each should have a minimum of 4, for the 4 time points
+  mutate(Freq = Freq/4)
 ```
 
 ```{r}
-sec_met <- sec_met %>%
-  mutate(Differentially_expressed = ifelse(FDR_JAvsEt1 < 0.01 | 
-                                            FDR_JAvsEt2 < 0.01 | 
-                                            FDR_JAvsEt4 < 0.01 | 
-                                            FDR_JAvsEt6 < 0.01, "Yes", "No")) %>% 
-  mutate(Differentially_expressed = coalesce(Differentially_expressed, "No")) %>% 
-  mutate(logFC_JAvsEt1 = ifelse(logFC_JAvsEt1 > 0 & Differentially_expressed == "Yes", "Upregulated", "Not Upregulated")) %>% 
-  mutate(logFC_JAvsEt1 = coalesce(logFC_JAvsEt1, "Not Upregulated")) %>%
-  mutate(logFC_JAvsEt2 = ifelse(logFC_JAvsEt2 > 0 & Differentially_expressed == "Yes", "Upregulated", "Not Upregulated")) %>% 
-  mutate(logFC_JAvsEt2 = coalesce(logFC_JAvsEt2, "Not Upregulated")) %>%
-  mutate(logFC_JAvsEt4 = ifelse(logFC_JAvsEt4 > 0 & Differentially_expressed == "Yes", "Upregulated", "Not Upregulated")) %>% 
-  mutate(logFC_JAvsEt4 = coalesce(logFC_JAvsEt4, "Not Upregulated")) %>%
-  mutate(logFC_JAvsEt6 = ifelse(logFC_JAvsEt6 > 0 & Differentially_expressed == "Yes", "Upregulated", "Not Upregulated")) %>% 
-  mutate(logFC_JAvsEt6 = coalesce(logFC_JAvsEt6, "Not Upregulated")) %>%
-  mutate(Glucosinolate_terms = ifelse(str_detect(GO, paste0(sec_met_go_g$go_id[1:5], collapse = "|")), "Yes", "No")) %>% 
-  mutate(Terpenoid_terms = ifelse(str_detect(GO, paste0(sec_met_go_t$go_id[1:5], collapse = "|")), "Yes", "No")) %>% 
-  mutate(Anthocyanin_terms = ifelse(str_detect(GO, paste0(sec_met_go_a$go_id[1:5], collapse = "|")), "Yes", "No")) %>% 
-  mutate(Upregulated_at_least_one_time_point = ifelse(logFC_JAvsEt1 == "Upregulated" |
-                                                      logFC_JAvsEt2 == "Upregulated" |
-                                                      logFC_JAvsEt4 == "Upregulated" |
-                                                      logFC_JAvsEt6 == "Upregulated", "Yes", "No")) %>% 
-  dplyr::select(c(TranscriptId, Differentially_expressed, Upregulated_at_least_one_time_point, Glucosinolate_terms, Terpenoid_terms, Anthocyanin_terms))
-
-sec_met
+sec_met_pal <- c(colorRampPalette(colors = c("#092a68", "#b0c3d8"))(3), colorRampPalette(colors = c("#5d0baa", "#c2add8"))(5), colorRampPalette(colors = c("#00905d", "#b6ffba"))(5))
+as.data.frame(table(sec_met[,c("Product", "Sub_type", "DE")])) %>% 
+  # each should have a minimum of 4, for the 4 time points
+  mutate(Freq = Freq/4)
+sec_met_a <- as.data.frame(table(sec_met[,c("Product", "Sub_type", "DE")])) %>% 
+  # each should have a minimum of 4, for the 4 time points
+  mutate(Freq = Freq/4) %>%
+  mutate(Product_sub = paste0(Product, "-", Sub_type)) %>% 
+  filter(Freq > 0) %>% 
+  ggplot(aes(x = DE, y = Freq, fill = Product_sub)) +
+  geom_col() +
+  labs(x = "Differentially expressed", y = "Number of Genes", fill = "Product", title = "A") +
+  scale_fill_manual(values = sec_met_pal) +
+  theme_minimal()
+sec_met_a
 ```
 
 ```{r}
-write_csv(sec_met, "data_out/Supplementary_data_4.csv")
+upset_pal <- data.frame(a = sec_met$both, b = ifelse(str_detect(sec_met$both, "Downregulated")&!str_detect(sec_met$both, "Upregulated"), "#d90007",
+                                        ifelse(str_detect(sec_met$both, "Upregulated")&!str_detect(sec_met$both, "Downregulated"), "#0069d9",
+                                               ifelse(str_detect(sec_met$both, "Downregulated")&str_detect(sec_met$both, "Upregulated"), "#561370", "gray")))) %>% filter(!is.na(a)) %>% distinct(a, .keep_all = T)
+upset_pal <- setNames(upset_pal$b, upset_pal$a)
+plot(seq_len(length(upset_pal)), 
+     rep_len(1, length(upset_pal)),
+     col = upset_pal, 
+     pch = 16, 
+     cex = 6, 
+     xaxt = 'n', 
+     yaxt = 'n', 
+     xlab = '', 
+     ylab = '')
 ```
 
-## Heatmap of the logFC
+```{r fig.width = 7, fig.height = 5}
+n <- c("Nitrogen-sulfur\nCompounds", "Phenolic\nCompounds", "Terpenoids\n")
+names(n) <- c("Nitrogen-sulfur Compounds", "Phenolic Compounds", "Terpenoids")
 
-Note: this is scaled by row
+ns <- sec_met %>% 
+  group_by(TranscriptId) %>% 
+  filter(Product == "Nitrogen-sulfur Compounds") %>% 
+  # exclude non-DE
+  filter(Cluster != 0) %>% 
+  ggplot() +
+  aes(x = Time, y = logFC, fill = TranscriptId, colour = both) +
+  geom_line(linewidth = 1.1, alpha = 0.6) +
+  scale_color_manual(values = upset_pal) +
+  scale_x_continuous(breaks = c(1,2,3,4,5,6)) +
+  guides(fill="none", color = "none") +
+  labs(color = "Cluster", x = NULL, y = "logFC", title = "B") +
+  geom_hline(yintercept = 0) +
+  facet_grid(Product~Sub_type, labeller = labeller(Product = n)) + 
+  theme_bw() + theme(
+    strip.background.y=element_rect(fill=alpha(sec_met_pal[1], 0.4)),
+                     strip.text = element_text(size = 9))
 
-```{r fig.height = 12, fig.width = 6}
-pheatmap(de_genes[,2:5], color = viridis(31, direction = -1), cutree_rows = 1, show_rownames = F, scale = "row", angle_col = "90", cluster_cols = F, na_col = "red", main = "logFC of all differentially\nexpressed genes from the contrast\n(JAxh-JA0h)-(Etxh-Et0h)")
+pc <- sec_met %>% 
+  group_by(TranscriptId) %>% 
+  filter(Product == "Phenolic Compounds") %>% 
+  # exclude non-DE
+  filter(Cluster != 0) %>% 
+  ggplot() +
+  aes(x = Time, y = logFC, fill = TranscriptId, colour = both) +
+  geom_line(linewidth = 1.1, alpha = 0.6) +
+  scale_color_manual(values = upset_pal) +
+  scale_x_continuous(breaks = c(1,2,3,4,5,6)) +
+  guides(fill="none", color = "none") +
+  labs(color = "Cluster", x = NULL, y = "logFC") +
+  geom_hline(yintercept = 0) +
+  facet_grid(Product~Sub_type, labeller = labeller(Product = n)) + 
+  theme_bw() + theme(
+    strip.background.y=element_rect(fill=alpha(sec_met_pal[4], 0.4)),
+                     strip.text = element_text(size = 10))
+
+tr <- sec_met %>% 
+  group_by(TranscriptId) %>% 
+  filter(Product == "Terpenoids") %>% 
+  # exclude non-DE
+  filter(Cluster != 0) %>% 
+  ggplot() +
+  aes(x = Time, y = logFC, fill = TranscriptId, colour = both) +
+  geom_line(linewidth = 1.1, alpha = 0.6) +
+  scale_color_manual(values = upset_pal) +
+  scale_x_continuous(breaks = c(1,2,3,4,5,6)) +
+  guides(fill="none", color = "none") +
+  labs(color = "Cluster", x = "Time (Hours)", y = "logFC") +
+  geom_hline(yintercept = 0) +
+  facet_grid(Product~Sub_type, labeller = labeller(Product = n)) + 
+  theme_bw() + theme(
+    strip.background.y=element_rect(fill=alpha(sec_met_pal[9], 0.4)),
+                     strip.text = element_text(size = 10))
+
+sec_met_b <- grid.arrange(ns, pc, tr, ncol = 1)
+sec_met_b
+```
+
+```{r fig.width = 10, fig.height = 9}
+png(width=8, height=6, units="in", res=300, filename = "Figure4.png")
+grid.arrange(sec_met_a +
+               theme(legend.position = "bottom",legend.title=element_blank())+
+               guides(fill=guide_legend(ncol=1)), 
+             sec_met_b, nrow = 1, widths = c(2,3))
+dev.off()
 ```
 
 # Heatmap only Arabidopsis genes of interest
@@ -1004,7 +1217,7 @@ de_JA
 ```
 
 ```{r}
-write_csv(rownames_to_column(de_JA[,1:12], var = "TranscriptID"), "data_out/Supplementary_data_3.csv")
+write_csv(rownames_to_column(de_JA[,1:12], var = "TranscriptID"), "data_out/Supporting_Data_S4.csv")
 ```
 
 ## Heatmap
@@ -1023,3 +1236,326 @@ de_JA %>%
   pheatmap(., legend_breaks = c(-4:20), fontsize = 12, color = colors, cutree_rows = 1, show_rownames = T, angle_col = "90", cluster_cols = F, cluster_rows=F, main = "logFC of JA-related genes")
 ```
 
+# Upset plot all time points
+```{r fig.width = 8, fig.height = 5}
+de_genes3 <- pairwise_de %>% filter(!(FDR_JAvsEt1 >= fdr & FDR_JAvsEt2 >= fdr & FDR_JAvsEt4 >= fdr & FDR_JAvsEt6 >= fdr))
+x = list("1h.Upregulated" = de_genes3$TranscriptId[de_genes3$logFC_JAvsEt1 > lfc & de_genes3$FDR_JAvsEt1 < fdr], 
+         "2h.Upregulated" = de_genes3$TranscriptId[de_genes3$logFC_JAvsEt2 > lfc & de_genes3$FDR_JAvsEt2 < fdr], 
+         "4h.Upregulated" = de_genes3$TranscriptId[de_genes3$logFC_JAvsEt4 > lfc & de_genes3$FDR_JAvsEt4 < fdr], 
+         "6h.Upregulated" = de_genes3$TranscriptId[de_genes3$logFC_JAvsEt6 > lfc & de_genes3$FDR_JAvsEt6 < fdr], 
+         "1h.Not_DE" = de_genes3$TranscriptId[lfc & de_genes3$FDR_JAvsEt1 >= fdr],
+         "2h.Not_DE" = de_genes3$TranscriptId[lfc & de_genes3$FDR_JAvsEt2 >= fdr],
+         "4h.Not_DE" = de_genes3$TranscriptId[lfc & de_genes3$FDR_JAvsEt4 >= fdr],
+         "6h.Not_DE" = de_genes3$TranscriptId[lfc & de_genes3$FDR_JAvsEt6 >= fdr],
+         "1h.Downregulated" = de_genes3$TranscriptId[de_genes3$logFC_JAvsEt1 < -lfc & de_genes3$FDR_JAvsEt1 < fdr], 
+         "2h.Downregulated" = de_genes3$TranscriptId[de_genes3$logFC_JAvsEt2 < -lfc & de_genes3$FDR_JAvsEt2 < fdr],
+         "4h.Downregulated" = de_genes3$TranscriptId[de_genes3$logFC_JAvsEt4 < -lfc & de_genes3$FDR_JAvsEt4 < fdr], 
+         "6h.Downregulated" = de_genes3$TranscriptId[de_genes3$logFC_JAvsEt6 < -lfc & de_genes3$FDR_JAvsEt6 < fdr])
+```
+
+```{r}
+paste0("Number of genes: ",nrow(de_genes3))
+```
+Output:
+```
+"Number of genes: 5133"
+```
+
+Note: this is Figure 2 (the 'groups' were added to the bottom in powerpoint)
+```{r fig.width = 8, fig.height = 7.8}
+upset(fromList(x), 
+      sets = c("1h.Upregulated", "2h.Upregulated", "4h.Upregulated", "6h.Upregulated", "1h.Not_DE", "2h.Not_DE", "4h.Not_DE", "6h.Not_DE", "1h.Downregulated", "2h.Downregulated", "4h.Downregulated", "6h.Downregulated"), 
+      order.by = "freq", 
+      keep.order = T, 
+      nintersects = 20,
+      nsets = 60, 
+      line.size = 1, 
+      empty.intersections = "on", 
+      text.scale = 1.6,
+      sets.bar.color = c(rep("#054fb5",4), rep("#4d4d4d", 4), rep("#912301", 4,)),
+      main.bar.color = c("#d90007", "#0069d9", "#d90007", "#d90007", "#0069d9", "#0069d9", "#d90007", "#0069d9", "#0069d9", "#d90007", "#0069d9", "#d90007", "#d90007", "#0069d9", "#0069d9", "#d90007", "#0069d9", "#d90007", "#561370", "#0069d9", "#0069d9", "#d90007", "#d90007", "#561370", "#d90007", "#d90007", "#0069d9", "#0069d9", "#d90007", "#561370", "#561370", "#561370", "#d90007", "#561370", "#561370", "#561370", "#d90007", "#561370", "#561370", "#561370", rep("gray", 4055)))
+```
+
+# GO analysis of de subsets
+
+
+```{r}
+de_genes3 <- pairwise_de %>% 
+  filter(!(FDR_JAvsEt1 >= fdr & FDR_JAvsEt2 >= fdr & FDR_JAvsEt4 >= fdr & FDR_JAvsEt6 >= fdr)) %>% 
+  mutate(JAvsEt1 = ifelse(logFC_JAvsEt1 > lfc & FDR_JAvsEt1 < fdr, "Upregulated", 
+                          ifelse(logFC_JAvsEt1 < -lfc & FDR_JAvsEt1 < fdr, "Downregulated", "Not_DE"))) %>% 
+  mutate(JAvsEt2 = ifelse(logFC_JAvsEt2 > lfc & FDR_JAvsEt2 < fdr, "Upregulated", 
+                          ifelse(logFC_JAvsEt2 < -lfc & FDR_JAvsEt2 < fdr, "Downregulated", "Not_DE"))) %>% 
+  mutate(JAvsEt4 = ifelse(logFC_JAvsEt4 > lfc & FDR_JAvsEt4 < fdr, "Upregulated", 
+                          ifelse(logFC_JAvsEt4 < -lfc & FDR_JAvsEt4 < fdr, "Downregulated", "Not_DE"))) %>%
+  mutate(JAvsEt6 = ifelse(logFC_JAvsEt6 > lfc & FDR_JAvsEt6 < fdr, "Upregulated", 
+                          ifelse(logFC_JAvsEt6 < -lfc & FDR_JAvsEt6 < fdr, "Downregulated", "Not_DE"))) %>%
+  unite("both", c(JAvsEt1, JAvsEt2, JAvsEt4, JAvsEt6), sep = "-")
+
+de_genes3
+```
+
+# GO analysis per group
+```{r}
+geneID2GO <- readMappings(file = "data_out/Supporting_Data_S1.tsv")
+str(head(geneID2GO))
+geneNames <- names(geneID2GO)
+```
+
+```{r}
+n <- unique(de_genes3$both)
+sig_go_terms_g3 <- data.frame(GO.ID = character(), Term = character(), Annotated = integer(), Significant = integer(), Expected = double(), "Rank in classic" = integer(), classic = character(), elim = character(), weight = character(), Group = character())
+
+for (i in 1:length(n)) {
+  myInterestingGenes <- de_genes3$TranscriptId[de_genes3$both == n[i]]
+  geneList <- factor(as.integer(geneNames %in% myInterestingGenes))
+  names(geneList) <- geneNames
+  
+  GOdata <- new("topGOdata", ontology = "BP", allGenes = geneList, annot = annFUN.gene2GO, gene2GO = geneID2GO, nodeSize = 8)
+  
+  resultFis <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+  resultFisher <- runTest(GOdata, algorithm = "elim", statistic = "fisher")
+  resultWeight <- runTest(GOdata, algorithm = "weight", statistic = "fisher")
+  
+  allRes <- GenTable(GOdata, classic = resultFis, elim = resultFisher, weight = resultWeight, orderBy = "weight", ranksOf = "classic", topNodes = 25)
+  allRes$Group <- n[i]
+  
+  sig_go_terms_g3 <- rbind(sig_go_terms_g3, allRes)
+}
+```
+
+
+```{r}
+sig_go_terms3 <- sig_go_terms_g3 %>% 
+  mutate(classic = as.numeric(classic)) %>% 
+  mutate(elim = as.numeric(elim)) %>% 
+  mutate(weight = as.numeric(weight)) %>% 
+  filter(elim < 0.01) %>% 
+  filter(weight < 0.01) %>% 
+  filter(classic < 0.01)
+
+sig_go_terms3
+```
+
+```{r}
+write_csv(sig_go_terms3, "data_out/Supporting_Data_S3.csv")
+```
+
+# RIPs
+
+## How many genes identified as a RIP?
+
+The RIP names we know:
+```{r}
+rip_names <- read_csv("data_in/blast_out_rips.csv") %>% dplyr::select(1:2) %>% rename("qaccver" = "Common", "saccver" = "TranscriptId")
+rip_names
+```
+
+```{r}
+rips <- interpro %>% filter(str_detect(InterPro_annotation_description, "[Rr]ibosome[- ][Ii]nacti")) %>% filter(Analysis == "Pfam")
+rips <- data.frame(TranscriptId = c(rips$Protein_accession, rip_names$TranscriptId)) %>% 
+  distinct(TranscriptId) %>% 
+  full_join(rip_names, by = "TranscriptId") %>% 
+  mutate(Common = replace_na(Common, "Uncharacterized"))
+rips %>% arrange(Common)
+```
+
+
+```{r}
+rips <- left_join(rips, de_genes3, by = "TranscriptId") %>% left_join(time_cluster, by = "TranscriptId") %>% 
+  pivot_longer(contains("logFC"), names_to = "Time", values_to = "logFC") %>% 
+  mutate(Time = as.numeric(str_extract(Time, "[0-9]")))
+rips %>% dplyr::select(c(1:2,11:14))
+```
+
+```{r}
+rip_pal <- setNames(turbo(7)[1:6], sort(unique(rips$Common[!is.na(rips$Cluster)])))
+plot(seq_len(length(rip_pal)), 
+     rep_len(1, length(rip_pal)),
+     col = rip_pal, 
+     pch = 16, 
+     cex = 6, 
+     xaxt = 'n', 
+     yaxt = 'n', 
+     xlab = '', 
+     ylab = '')
+```
+
+```{r}
+png(width=5, height=4, res=300, units="in", file = "data_out/Figure3.png")
+rips %>% 
+  group_by(TranscriptId) %>% 
+  filter(!is.na(Cluster)) %>% 
+  ggplot() +
+  aes(x = Time, y = logFC, shape = TranscriptId, color = Common) +
+  geom_line(linewidth = 1.5, alpha = 0.6) +
+  geom_point(size = 3) +
+  geom_hline(yintercept = 0) +
+  guides(fill="none") +
+  labs(color = "Gene", x = "Time (Hours)", y = "logFC") +
+  scale_x_continuous(breaks = seq(1 , 6, 1), expand = c(0,0)) +
+  scale_color_manual(values = rip_pal) +
+  scale_shape_manual(values = c(4,21:25)) +
+  theme_bw()
+dev.off()
+```
+
+# Compare assemblies 2019 vs 2022
+```{r}
+path_19 <- "data_in/maker_annotation.gff3"
+gff3_19 <- read_tsv(path_19, col_names = NULL, comment = "#")
+
+gff3_22 <- gff3
+```
+
+```{r}
+g_19 <- gff3_19 %>% 
+  mutate(ID = str_extract(X9, "[A-Z]+_[0-9]+-[A-Z]{2}")) %>% 
+  # only interested in primary transcript
+  filter(str_detect(ID, "RA")) %>% 
+  dplyr::select(c(3:5,10)) %>% 
+  # remove UTRs
+  filter(!str_detect(X3, "UTR")) %>% 
+  # remove genes
+  filter(X3 != "gene") %>% 
+  # get length
+  mutate(Length = abs(X4-X5)) %>% 
+  dplyr::select(!c(X4, X5))
+# remove IDs associated with genes
+g_19
+```
+
+```{r}
+s_19 <- g_19 %>% pivot_wider(names_from = X3, values_from = Length) %>% 
+  group_by(ID) %>% 
+  # convert mRNA from list to number
+  mutate(mRNA = as.numeric(mRNA)) %>% 
+  # get number of elements per transcript
+  mutate(n_CDS = lengths(CDS)) %>% 
+  mutate(n_exon = lengths(exon)) %>% 
+  # get total element length
+  mutate(len_CDS = sum(unlist(CDS))) %>% 
+  mutate(len_exon = sum(unlist(exon))) %>% 
+  mutate(len_intron = mRNA-len_exon) %>% 
+  # get mean element length
+  mutate(mean_CDS = mean(unlist(CDS))) %>% 
+  mutate(mean_exon = mean(unlist(exon))) %>% 
+  # remove uneeded column
+  dplyr::select(!c(exon, CDS))
+s_19
+```
+
+```{r}
+sum_19 <- s_19 %>% 
+  ungroup() %>% 
+  dplyr::select(!ID) %>% 
+  pivot_longer(1:8, names_to = "Feature") %>% 
+  group_by(Feature) %>% 
+  # remove NAs
+  filter(!is.na(value)) %>% 
+  # generate summary stats
+  summarize(Mean = mean(value), Minimum = min(value), Maximum = max(value), Median = median(value)) %>% 
+  mutate(Assembly = "2019")
+sum_19
+```
+
+```{r}
+g_22 <- gff3_22 %>% 
+  mutate(ID = str_extract(X9, "anno[0-9]+\\.[a-z]+[0-9]+\\.[a-z]+[0-9]+")) %>% 
+  dplyr::select(c(3:5,10)) %>% 
+  # get length
+  mutate(Length = abs(X4-X5)) %>% 
+  dplyr::select(!c(X4, X5))
+# rename transcript to mRNA
+g_22$X3[g_22$X3 == "transcript"] <- "mRNA"
+g_22
+```
+
+```{r}
+s_22 <- g_22 %>% pivot_wider(names_from = X3, values_from = Length) %>% 
+  group_by(ID) %>% 
+  # convert mRNA from list to number
+  mutate(mRNA = as.numeric(mRNA)) %>% 
+  # get number of elements per mRNA
+  mutate(n_CDS = lengths(CDS)) %>% 
+  mutate(n_exon = lengths(exon)) %>% 
+  # get total element length
+  mutate(len_CDS = sum(unlist(CDS))) %>% 
+  mutate(len_exon = sum(unlist(exon))) %>% 
+  mutate(len_intron = mRNA-len_exon) %>% 
+  # get mean element length
+  mutate(mean_CDS = mean(unlist(CDS))) %>% 
+  mutate(mean_exon = mean(unlist(exon))) %>% 
+  # remove uneeded column
+  dplyr::select(!c(exon, CDS))
+s_22
+```
+
+```{r}
+sum_22 <- s_22 %>% 
+  ungroup() %>% 
+  dplyr::select(!ID) %>% 
+  pivot_longer(1:8, names_to = "Feature") %>% 
+  group_by(Feature) %>% 
+  # remove NAs
+  filter(!is.na(value)) %>% 
+  # generate summary stats
+  summarize(Mean = mean(value), Minimum = min(value), Maximum = max(value), Median = median(value)) %>% 
+  mutate(Assembly = "2022")
+sum_22
+```
+
+```{r}
+comb <- rbind(sum_19, sum_22) %>% 
+  mutate(Feature = str_replace(Feature, "len_CDS", "Total length of CDS")) %>% 
+  mutate(Feature = str_replace(Feature, "len_exon", "Total length of exons")) %>% 
+  mutate(Feature = str_replace(Feature, "len_intron", "Total length of introns")) %>%
+  mutate(Feature = str_replace(Feature, "^n_CDS", "Number of CDS per gene")) %>% 
+  mutate(Feature = str_replace(Feature, "^n_exon", "Number of exons per gene")) %>% 
+  mutate(Feature = str_replace(Feature, "mean_CDS", "Mean length of CDS")) %>% 
+  mutate(Feature = str_replace(Feature, "mean_exon", "Mean length of exons")) %>% 
+  mutate(Feature = str_replace(Feature, "mRNA", "Length of mRNA"))
+comb
+```
+
+```{r}
+s1 <- comb %>%
+ filter(Feature %in% c("Length of mRNA", "Total length of CDS", "Total length of exons", "Total length of introns"
+)) %>%
+ ggplot() +
+  aes(x = Feature, fill = Assembly, weight = Mean) +
+  geom_bar(position = "dodge") +
+  labs(y = "Mean Length (bp)", x = "") +
+  scale_fill_brewer(palette = "Set1") +
+  theme_minimal()
+```
+
+```{r}
+s2 <- rbind(mutate(s_19, Assembly = "2019"), mutate(s_22, Assembly = "2022")) %>% 
+  ungroup() %>% 
+  dplyr::select(!ID) %>% 
+  pivot_longer(1:8) %>% 
+  mutate(name = str_replace(name, "len_CDS", "Total length of CDS")) %>% 
+  mutate(name = str_replace(name, "len_exon", "Total length of exons")) %>% 
+  mutate(name = str_replace(name, "len_intron", "Total length of introns")) %>%
+  mutate(name = str_replace(name, "^n_CDS", "Number of CDS")) %>% 
+  mutate(name = str_replace(name, "^n_exon", "Number of exons")) %>% 
+  mutate(name = str_replace(name, "mean_CDS", "Mean length of CDS")) %>% 
+  mutate(name = str_replace(name, "mean_exon", "Mean length of exons")) %>% 
+  mutate(name = str_replace(name, "mRNA", "Length of mRNA")) %>% 
+ filter(name %in% c("Length of mRNA", "Total length of CDS", "Total length of exons", "Total length of introns"
+)) %>%
+ ggplot() +
+  aes(x = name, y = value, fill = Assembly) +
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Set1", direction = 1) +
+  scale_y_continuous(trans = "log10") +
+  labs(x = "Feature", y = "Log10 Feature Length (bp)") +
+  theme_minimal()
+```
+
+```{r}
+png(width=7, height=5, units="in", res=300, file="data_out/Supporting_Figure_S2.png")
+grid.arrange(s1+labs(title="A"), s2+labs(title="B"), ncol=1)
+dev.off()
+```
