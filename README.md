@@ -4,7 +4,7 @@ This is all the scripts and code used in the paper __________
 
 ## Package versions
 
-[Versions of all command-line software used are tabulated here](https://github.com/kd-lab/Genome_Assembly_Annotation/blob/main/Package_versions.xlsx)
+[Versions of all command-line software used are tabulated here](https://github.com/kd-lab/Genome_Assembly_Annotation/blob/main/Package_versions.md)
 
 ## Check quality of reads
 
