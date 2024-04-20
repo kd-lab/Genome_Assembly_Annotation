@@ -1,5 +1,5 @@
 ---
-title: "R Notebook for JA timecourse 2022"
+title: "R Notebook for JA timecourse 2023"
 output: html_notebook
 ---
 
@@ -190,6 +190,10 @@ rownames(dat) <- tid
 as.data.frame(head(dat))
 ```
 
+```{r}
+write_tsv(rownames_to_column(as.data.frame(dat), var = "TranscriptID"), file = "data_out/Supporting_Data_S5.tsv")
+```
+
 ## Read in metadata
 ```{r}
 meta <- read_csv("data_in/metadata.csv") %>% mutate(Group = factor(paste(Treatment,Time, sep = "")))
@@ -205,6 +209,10 @@ y <- DGEList(counts=dat, group=meta$Group)
 y <- calcNormFactors(y, method="TMM")
 
 y$samples
+```
+
+```{r}
+write_csv(rownames_to_column(as.data.frame(cpm(y)), var = "TranscriptID"), file = "data_out/Supporting_Data_S6.csv")
 ```
 
 ## Make a matrix indicating the relationship between different samples
@@ -372,12 +380,6 @@ temp <- as.data.frame(topTags(qlf, n = nrow(dat), sort.by = "none")) %>%
 pairwise_de <- merge(pairwise_de, temp, by="TranscriptId")
 
 pairwise_de
-```
-
-Write to file
-
-```{r}
-write.csv(pairwise_de, "data_out/Supporting_Data_S2.csv", row.names = F)
 ```
 
 ## Select differentially expressed genes (FDR < 0.01 in at least one pairwise comparison)
@@ -556,6 +558,25 @@ cluster_final <- cluster_hi_k4c
 ```{r}
 time_cluster <- data.frame("TranscriptId" = names(cluster_final@datalist), Cluster = cluster_final@cluster)
 time_cluster
+```
+
+```{r}
+GO_clean %>% 
+  filter(!is.na(GO)) %>% 
+  separate_wider_delim("GO", delim = ",", names_sep = "_", too_few = "align_start") %>% 
+  pivot_longer(contains("GO"), values_to = "GO") %>% 
+  dplyr::select(!name) %>% 
+  filter(!is.na(GO)) %>% 
+  left_join(GO_names, by = "GO") %>% 
+  unite("GO", 2:3, sep = " ") %>% 
+  group_by(Protein_accession) %>% 
+  mutate(GO = paste0(GO, collapse = "; ")) %>% 
+  slice(1) %>% 
+  ungroup() %>% 
+  rename("TranscriptId" = "Protein_accession") %>% 
+  left_join(dplyr::select(pairwise_de, !contains("CPM")), ., by = "TranscriptId") %>% 
+  full_join(time_cluster, ., by = "TranscriptId") %>% 
+  write.csv(., "data_out/Supplementary_Data_S2.csv", row.names = F)
 ```
 
 ### How many genes per cluster?
@@ -889,7 +910,7 @@ sig_go_terms
 ```
 
 ```{r}
-write.csv(sig_go_terms, "data_out/Supporting_Data_S5.csv", row.names = F)
+write.csv(sig_go_terms, "data_out/Supporting_Data_S7.csv", row.names = F)
 ```
 
 ## Make plots
@@ -1161,6 +1182,8 @@ arab_genes
 
 ```{r}
 arab_genes <- arab_genes %>% 
+  # get araport gene ID
+  mutate(AraportID = str_remove(TranscriptId, " \\|.*"), .before = 1) %>% 
   # filter out starting sequence
   mutate(TranscriptId = str_extract(TranscriptId, "Symbols: [A-Za-z0-9, -.]*")) %>% 
   # select only genes of interest
@@ -1171,7 +1194,9 @@ arab_genes <- arab_genes %>%
   # extract just gene ID
   mutate(TranscriptId = str_extract(TranscriptId, paste0(read_csv("JA_pathway/genes.csv")$Gene, "|", read_csv("JA_pathway/genes.csv")$Gene2, collapse = "|"))) %>% 
   # remove extra commas
-  mutate(TranscriptId = str_remove(TranscriptId, ","))
+  mutate(TranscriptId = str_remove(TranscriptId, ",")) %>% 
+  # remove whitespace
+  mutate(TranscriptId = str_squish(TranscriptId))
 arab_genes
 ```
 
@@ -1190,15 +1215,27 @@ blastp -query arab_proteins.fasta -subject annotations_combined_Nov2022_pep.fa -
 ```
 
 ```{r}
+read_csv("JA_pathway/blast_out_arab.csv", col_names = c("Arab_GeneID", "TranscriptId", "percent_identical", "alignment_length", "number_mismatches", "gapopenings", "qstart", "qend", "sstart", "send", "evalue", "bitscore")) %>% 
+  # tidy TranscriptId
+  mutate(TranscriptId = str_remove(TranscriptId, "_[0-9]")) %>% 
+  right_join(dplyr::rename(arab_genes[,1:2], "Arab_GeneID" = "TranscriptId"), ., by = "Arab_GeneID") %>% 
+  write_csv(file = "data_out/Supporting_Data_S4.csv")
+```
+
+```{r}
 de_JA <- read_csv("JA_pathway/blast_out_arab.csv", col_names = c("query", "TranscriptId", "percent_identical", "alignment_length", "number_mismatches", "gapopenings", "qstart", "qend", "sstart", "send", "evalue", "bitscore")) %>% 
   # tidy TranscriptId
   mutate(TranscriptId = str_remove(TranscriptId, "_[0-9]")) %>% 
   # merge with logFC values
   left_join(., de_genes, by = "TranscriptId") %>% 
+  # keep only those with evalue < 1e-50
+  filter(evalue < 1e-50) %>% 
   # keep only those with high percent ID
   filter(percent_identical > 50) %>% 
+  # keep only those with alignment length > 100
+  filter(alignment_length > 150) %>% 
   # keep only those with bit score > 40
-  filter(bitscore > 40) %>% 
+  filter(bitscore > 50) %>% 
   # remove duplicate pokeweed genes (keep only the transcript IDs with the highest bit score)
   arrange(desc(bitscore)) %>% 
   arrange(desc(percent_identical)) %>% 
@@ -1211,29 +1248,39 @@ de_JA <- read_csv("JA_pathway/blast_out_arab.csv", col_names = c("query", "Trans
   slice_max(percent_identical, n=10) %>% 
   arrange(query) %>% 
   mutate(TID = paste0(query,"-",TranscriptId)) %>% 
-  column_to_rownames(var = "TID")
+  column_to_rownames(var = "TID") %>% 
+  # decided to exclude "AFO"   "ASA1"  "CKX1"    "EIL1"    "EIN3"  "YUC2"
+  filter(!str_detect(query, "AFO|ASA1|CKX1|EIL1|EIN3|YUC2"))
 
 de_JA
-```
-
-```{r}
-write_csv(rownames_to_column(de_JA[,1:12], var = "TranscriptID"), "data_out/Supporting_Data_S4.csv")
+summary(de_JA)
 ```
 
 ## Heatmap
 
 ```{r}
-colors <- c(RColorBrewer::brewer.pal(7, "YlOrBr")[6:2], "white", mako(18, direction = -1))
+colors <- c(colorRampPalette(c("#357BA2FF", "#49C1ADFF", "#DEF5E5FF"))(99), "white", plasma(55, direction = -1), colorRampPalette(c("#0b0779", "black"))(55))
 ```
 
-```{r, fig.width = 4.1, fig.height = 15}
+```{r, fig.width = 4.1, fig.height = 9.5}
+paletteLength <- 200
+nums <- c(de_JA$logFC_JAvsEt1, de_JA$logFC_JAvsEt2, de_JA$logFC_JAvsEt4, de_JA$logFC_JAvsEt6)
+mybreaks <- c(seq(min(nums), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(nums)/paletteLength, max(nums), length.out=floor(paletteLength/2)))
 de_JA %>% 
+  mutate(logFC_JAvsEt1 = ifelse(logFC_JAvsEt1 == 0, NA, logFC_JAvsEt1)) %>% 
+  mutate(logFC_JAvsEt2 = ifelse(logFC_JAvsEt2 == 0, NA, logFC_JAvsEt2)) %>% 
+  mutate(logFC_JAvsEt4 = ifelse(logFC_JAvsEt4 == 0, NA, logFC_JAvsEt4)) %>% 
+  mutate(logFC_JAvsEt6 = ifelse(logFC_JAvsEt1 == 0, NA, logFC_JAvsEt6)) %>% 
   group_by(TranscriptId) %>% 
   filter(sum(logFC_JAvsEt1,logFC_JAvsEt1,logFC_JAvsEt1,logFC_JAvsEt1)!=0) %>% 
   mutate(TID = paste0(query,"-",TranscriptId)) %>% 
   column_to_rownames(var = "TID") %>% 
   dplyr::select(13:16) %>% 
-  pheatmap(., legend_breaks = c(-4:20), fontsize = 12, color = colors, cutree_rows = 1, show_rownames = T, angle_col = "90", cluster_cols = F, cluster_rows=F, main = "logFC of JA-related genes")
+  pheatmap(., legend_breaks = c(-4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20), 
+           breaks = mybreaks,
+           fontsize = 12, color = colors, na_col = "green",
+           cutree_rows = 1, show_rownames = T, angle_col = "90", cluster_cols = F, cluster_rows=F, main = "logFC of JA-related genes")
 ```
 
 # Upset plot all time points
@@ -1356,20 +1403,13 @@ rips <- interpro %>% filter(str_detect(InterPro_annotation_description, "[Rr]ibo
 rips <- data.frame(TranscriptId = c(rips$Protein_accession, rip_names$TranscriptId)) %>% 
   distinct(TranscriptId) %>% 
   full_join(rip_names, by = "TranscriptId") %>% 
-  mutate(Common = replace_na(Common, "Uncharacterized"))
+  mutate(Common = replace_na(Common, "Uncharacterized")) %>% 
+  mutate(Common = str_replace(Common, "KPAP", "Novel PAP"))
 rips %>% arrange(Common)
 ```
 
-
 ```{r}
-rips <- left_join(rips, de_genes3, by = "TranscriptId") %>% left_join(time_cluster, by = "TranscriptId") %>% 
-  pivot_longer(contains("logFC"), names_to = "Time", values_to = "logFC") %>% 
-  mutate(Time = as.numeric(str_extract(Time, "[0-9]")))
-rips %>% dplyr::select(c(1:2,11:14))
-```
-
-```{r}
-rip_pal <- setNames(turbo(7)[1:6], sort(unique(rips$Common[!is.na(rips$Cluster)])))
+rip_pal <- turbo(7)[1:6]
 plot(seq_len(length(rip_pal)), 
      rep_len(1, length(rip_pal)),
      col = rip_pal, 
@@ -1382,20 +1422,64 @@ plot(seq_len(length(rip_pal)),
 ```
 
 ```{r}
-png(width=5, height=4, res=300, units="in", file = "data_out/Figure3.png")
-rips %>% 
-  group_by(TranscriptId) %>% 
+rownames_to_column(as.data.frame(cpm(y)), var = "TranscriptId") %>% 
+  left_join(rips, ., by = "TranscriptId") %>% 
+  pivot_longer(contains("h")) %>% 
+  filter(!is.na(value)) %>% 
+  mutate(name = str_extract(name, "[EtJA0-9h]{4}")) %>% 
+  group_by(name, Common, TranscriptId) %>% 
+  summarize(mean_cpm = mean(value), sd_cpm = sd(value), .groups = "keep") %>% 
+  mutate(Treatment = str_extract(name, "[EtJA]{2}"),
+         Time = as.numeric(str_extract(name, "[0-9]"))) %>% 
+  unite("Gene", 2:3, sep = " - ") %>% 
+  filter(!str_detect(Gene, "5' end missing")) %>% 
+  ungroup() %>% 
+  select(Gene, Treatment, Time, mean_cpm, sd_cpm) %>% 
+  write_csv(file = "data_out/Supporting_Table_1.csv")
+```
+
+```{r}
+png(width=5, height=5, res=300, units="in", file = "data_out/Figure3.png")
+left_join(rips, de_genes3, by = "TranscriptId") %>% left_join(time_cluster, by = "TranscriptId") %>% 
+  pivot_longer(contains("logFC"), names_to = "Time", values_to = "logFC") %>% 
+  mutate(Time = as.numeric(str_extract(Time, "[0-9]"))) %>% 
+  arrange(Common) %>% 
+  unite("Gene", 1:2, sep = " - ") %>% 
+  group_by(Gene) %>% 
+  mutate(Gene = factor(Gene, levels = c("anno1.g31872.t1 - PAP-I", "anno2.g17397.t1 - PAP-II", "anno1.g31869.t1 - PAP S1", "anno1.g31868.t1 - PAP alpha", "anno1.g32258.t1 - Novel PAP", "anno1.g31874.t1 - 5' end missing"))) %>% 
   filter(!is.na(Cluster)) %>% 
+  filter(!str_detect(Gene, "5' end missing")) %>% 
   ggplot() +
-  aes(x = Time, y = logFC, shape = TranscriptId, color = Common) +
+  aes(x = Time, y = logFC, color = Gene) +
   geom_line(linewidth = 1.5, alpha = 0.6) +
   geom_point(size = 3) +
+  geom_hline(yintercept = 0) +
+  guides(fill="none") +
+  labs(color = "", x = "Time (Hours)", y = "logFC") +
+  scale_x_continuous(breaks = seq(1 , 6, 1), expand = c(0,0)) +
+  scale_color_manual(values = rip_pal) +
+  theme_bw() +
+  guides(color = guide_legend(nrow = 3)) +
+  theme(legend.position = "bottom")
+dev.off()
+```
+
+# plot qrt-PCR
+```{r}
+png(width=7, height=5, units="in", res=300, file="data_out/Supporting_Figure_S3.png")
+read_csv("data_in/qRT-PCR.csv") %>% 
+  mutate(Gene = factor(Gene, levels = c("PAP-I", "PAP-II", "PAP S1", "PAP alpha", "Novel PAP"))) %>% 
+  ggplot() +
+  aes(x = Time, y = logFC, color = Gene, fill = Gene) +
+  geom_ribbon(aes(ymin = sd_min, ymax = sd_max), alpha = 0.4, linewidth = 0.2) +
+  geom_point(size = 4) +
+  geom_line(linewidth = 1) +
   geom_hline(yintercept = 0) +
   guides(fill="none") +
   labs(color = "Gene", x = "Time (Hours)", y = "logFC") +
   scale_x_continuous(breaks = seq(1 , 6, 1), expand = c(0,0)) +
   scale_color_manual(values = rip_pal) +
-  scale_shape_manual(values = c(4,21:25)) +
+  scale_fill_manual(values = rip_pal) +
   theme_bw()
 dev.off()
 ```
